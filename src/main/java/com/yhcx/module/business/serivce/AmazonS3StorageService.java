@@ -28,7 +28,7 @@ import java.time.Duration;
 
 /**
  * AWS SDK for Java 2.x S3 存储服务。
- *
+ * <p>
  * 当前阶段：
  * - 普通文件上传已经切到 S3TransferManager v2；
  * - 普通流上传使用 S3Client；
@@ -47,7 +47,7 @@ public class AmazonS3StorageService {
 
     /**
      * 上传本地文件。
-     *
+     * <p>
      * v2 使用 S3TransferManager + CRT S3AsyncClient：
      * - 大于 multipart threshold 自动 multipart；
      * - multipart part 并行上传；
@@ -91,7 +91,7 @@ public class AmazonS3StorageService {
 
     /**
      * 流式上传。
-     *
+     * <p>
      * 适用于普通流场景；800GB 文件不建议把整个文件通过应用层同步流式转发，
      * 后续大文件方案会使用 Transfer Manager 的 multipart/resumable 能力。
      */
@@ -138,7 +138,7 @@ public class AmazonS3StorageService {
 
     /**
      * 生成预签名下载 URL。
-     *
+     * <p>
      * S3Presigner 官方限制单个预签名请求最长 7 天。
      */
     public String generatePresignedUrl(String key, Duration ttl) {

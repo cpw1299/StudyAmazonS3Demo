@@ -24,6 +24,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <aws-sdk.version>2.55.0</aws-sdk.version>
         <aws-crt.version>0.48.4</aws-crt.version>
+        <mybatis-plus.version>3.5.9</mybatis-plus.version>
     </properties>
 
     <dependencyManagement>
@@ -79,6 +80,17 @@
             <groupId>software.amazon.awssdk.crt</groupId>
             <artifactId>aws-crt</artifactId>
             <version>${aws-crt.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus</artifactId>
+            <version>${mybatis-plus.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.yhcx.boot</groupId>
+            <artifactId>yhcx-spring-boot-starter-file</artifactId>
         </dependency>
     </dependencies>
 
