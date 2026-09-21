@@ -4,86 +4,78 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * S3 / MinIO 客户端配置。
+ * AWS S3 / MinIO 配置。
  *
- * 说明：
- * 1. 默认值按中等生产负载设计，不代表所有机器都应使用同一数值；
- * 2. 高并发、大文件场景应结合 CPU、带宽、MinIO 节点数和连接数压测；
- * 3. AK/SK 不建议写入 application.yml，生产使用 K8s Secret / Vault / 环境变量。
+ * AWS SDK 2.x：
+ * - 普通对象操作使用 S3Client；
+ * - 文件传输使用 S3TransferManager + AWS CRT S3AsyncClient；
+ * - 800GB 级对象必须重点关注 multipart part size、并发数和网络带宽。
  */
 @Data
 @ConfigurationProperties(prefix = "aws.s3")
 public class AmazonS3Properties {
 
-    /** S3 签名 Region；MinIO 可使用服务端配置的 region，常见为 us-east-1。 */
+    /** S3 签名 Region；MinIO 未特别配置时通常使用 us-east-1。 */
     private String region = "us-east-1";
 
-    /** MinIO / 私有化 S3 endpoint；例如 https://minio.example.com:9000。 */
+    /** MinIO / 私有化 S3 endpoint，例如 https://minio.example.com:9000。 */
     private String endpoint;
 
-    /** Access Key；生产环境建议由 Secret/环境变量注入。 */
+    /** Access Key；生产环境建议由 K8s Secret / Vault / 环境变量注入。 */
     private String accessKey;
 
-    /** Secret Key；生产环境建议由 Secret/环境变量注入。 */
+    /** Secret Key；生产环境建议由 K8s Secret / Vault / 环境变量注入。 */
     private String secretKey;
 
-    /** 默认 bucket；建议由 IaC/运维预先创建，应用只负责使用。 */
+    /** 默认 bucket；生产建议由 IaC/运维提前创建。 */
     private String defaultBucket;
 
-    /** 是否使用 path-style：/bucket/object。MinIO 生产环境通常开启。 */
+    /** MinIO 通常开启 path-style：/bucket/object。 */
     private boolean pathStyleAccess = true;
 
-    /** 是否启用 HTTP chunked encoding；兼容性优先时 MinIO 建议关闭。 */
-    private boolean chunkedEncodingEnabled = false;
+    /** 是否启用 HTTPS；生产环境建议 true。 */
+    private boolean useHttps = true;
 
-    /** HTTP 连接池最大连接数；应 >= TransferManager 并发 + 普通 S3 请求并发。 */
+    /** S3 API 最大连接并发；普通 S3Client 与 TransferManager 共用此类网络资源时需要压测。 */
     private int maxConnections = 200;
 
     /** TCP/TLS 建连超时，毫秒。 */
-    private int connectionTimeoutMs = 5000;
+    private long connectionTimeoutMs = 5000;
+
+    /** 单次 API 调用尝试的超时时间，毫秒；大文件分片不应设置得过小。 */
+    private long apiCallAttemptTimeoutMs = 120000;
+
+    /** 单次 API 调用总超时时间，毫秒；应大于 attempt timeout。 */
+    private long apiCallTimeoutMs = 180000;
+
+    /** SDK 标准客户端最大重试次数。 */
+    private int maxRetries = 3;
 
     /**
-     * Socket 读写超时，毫秒。
-     * 大文件/慢网络不能过小，否则一个正常分片可能因短暂无数据被判定超时。
+     * multipart 触发阈值，单位 MB。
+     * 800GB 文件远高于该值，会自动进入 multipart。
      */
-    private int socketTimeoutMs = 120000;
-
-    /** HTTP 连接最大空闲时间，毫秒；降低复用已被 LB/MinIO 关闭的旧连接的概率。 */
-    private long connectionMaxIdleMs = 60000;
-
-    /** 连接空闲超过该值后，在从连接池取出时进行可用性校验，毫秒。 */
-    private int validateAfterInactivityMs = 5000;
-
-    /** 单条 HTTP 连接最大生命周期，毫秒；到期后重新建立连接。 */
-    private long connectionTtlMs = 300000;
-
-    /** 单个请求最多自动重试次数；需结合业务幂等性与 MinIO 限流策略调整。 */
-    private int maxErrorRetry = 3;
-
-    /** TCP KeepAlive；长连接生产环境建议开启。 */
-    private boolean tcpKeepAlive = true;
-
-    /** 是否使用 HTTPS；生产环境建议开启。 */
-    private boolean useHttps = true;
-
-    /** TransferManager 工作线程数；控制 multipart 分片上传/下载并发。 */
-    private int transferThreads = 16;
-
-    /** 超过该大小才启用 multipart upload，单位 MB。 */
-    private long multipartThresholdMb = 32;
-
-    /** multipart 每个分片的最小大小，单位 MB；最终会换算为 byte。 */
-    private long multipartPartSizeMb = 16;
-
-    /** 是否禁用 TransferManager 的并行下载；false 表示允许并行下载。 */
-    private boolean disableParallelDownloads = false;
+    private long multipartThresholdMb = 128;
 
     /**
-     * 是否强制为 multipart upload 计算 MD5。
-     * Object Lock 等场景可能需要；普通 MinIO 上传一般不需要。
+     * multipart 最小 part 大小，单位 MB。
+     *
+     * 800GB 场景建议至少 128MB 级别，否则容易超过 S3 multipart 最大 10,000 parts 限制。
      */
-    private boolean alwaysCalculateMultipartMd5 = false;
+    private long multipartPartSizeMb = 128;
 
-    /** 是否在启动时自动创建 bucket；生产建议 false，由 IaC/运维创建。 */
+    /**
+     * CRT S3 最大并发连接数。
+     * 实际吞吐还受机器 CPU、内存、网卡、MinIO 集群和 LB 限制。
+     */
+    private int maxConcurrency = 16;
+
+    /**
+     * CRT 目标吞吐，Gbps。
+     * 仅作为 CRT 调优目标，不代表一定能达到。
+     */
+    private double targetThroughputGbps = 5.0;
+
+    /** 是否启动时自动创建 bucket；生产建议 false。 */
     private boolean autoCreateBucket = false;
 }
