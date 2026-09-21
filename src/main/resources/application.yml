@@ -1,0 +1,25 @@
+aws:
+  s3:
+    region: ${AWS_REGION:us-east-1}
+    # 对接 MinIO / 私有化对象存储时填写，如 http://minio.internal:9000；标准 AWS 留空
+    endpoint: ${AWS_S3_ENDPOINT:}
+    # 生产环境严禁硬编码，通过环境变量 / K8s Secret / Vault 注入
+    # 两者都留空时，自动回退到默认凭证链（EC2 IAM Role / ECS Task Role），这是 AWS 上的最佳实践
+    access-key: ${AWS_ACCESS_KEY_ID:}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:}
+    default-bucket: ${AWS_S3_BUCKET:my-app-bucket}
+    # MinIO / 自建对象存储必须为 true；标准 AWS 一般为 false
+    path-style-access: ${AWS_S3_PATH_STYLE:false}
+    chunked-encoding-enabled: true
+    # ---- 连接池与超时（按业务并发量调整）----
+    max-connections: 200
+    connection-timeout-ms: 5000
+    socket-timeout-ms: 30000
+    connection-ttl-ms: 60000
+    max-error-retry: 3
+    tcp-keep-alive: true
+    use-https: true
+    # ---- 大文件分片上传 ----
+    multipart-threshold-mb: 16
+    multipart-part-size-mb: 16
+    auto-create-bucket: false
