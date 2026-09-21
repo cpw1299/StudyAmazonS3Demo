@@ -35,7 +35,7 @@ import java.time.Duration;
  */
 @Slf4j
 @Configuration
-@EnableConfigurationProperties(AmazonS3Properties.class)
+@EnableConfigurationProperties({AmazonS3Properties.class, DatasetCopyProperties.class})
 public class AmazonS3Config {
 
     private static final long MB = 1024L * 1024L;
