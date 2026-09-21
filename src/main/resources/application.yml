@@ -5,100 +5,77 @@ aws:
     # ============================================================
 
     # S3 签名 Region。
-    # MinIO 必须与服务端 region/签名配置保持一致；如果未特别配置，通常使用 us-east-1。
+    # 即使使用 MinIO endpoint，SDK 2.x 仍需要 Region 用于签名。
     region: ${AWS_REGION:us-east-1}
 
     # MinIO API 地址，例如：
     #   https://minio.example.com:9000
-    # 生产环境不要写 localhost；通过环境变量/K8s ConfigMap 注入。
+    # AWS S3 生产环境可留空，让 SDK 根据 Region 自动选择官方 endpoint。
     endpoint: ${AWS_S3_ENDPOINT:}
 
-    # Access Key / Secret Key。
-    # 生产环境不要硬编码，建议使用 K8s Secret、Vault 或环境变量。
+    # 生产环境不要硬编码 AK/SK，建议使用 K8s Secret / Vault / IAM Role / 环境变量。
     access-key: ${AWS_ACCESS_KEY_ID:}
     secret-key: ${AWS_SECRET_ACCESS_KEY:}
 
-    # 默认 bucket。生产建议提前创建，不让应用启动时自动创建。
+    # 默认 bucket。生产建议由 Terraform/Ansible/运维提前创建。
     default-bucket: ${AWS_S3_BUCKET:my-app-bucket}
 
-    # MinIO 推荐 true：
-    # 请求形式为 /bucket/object，避免虚拟主机式 bucket DNS/证书问题。
+    # MinIO 通常开启 path-style：/bucket/object。
+    # AWS SDK 2.x 在 endpointOverride 场景默认可能使用 virtual-hosted-style，
+    # 因此 MinIO 建议显式开启。
     path-style-access: ${AWS_S3_PATH_STYLE:true}
 
-    # MinIO 兼容性优先时关闭 chunked encoding。
-    # 关闭后 SDK 更容易与部分代理/LB/S3 兼容实现协作。
-    chunked-encoding-enabled: ${AWS_S3_CHUNKED_ENCODING:false}
-
-    # ============================================================
-    # HTTP 连接池
-    # ============================================================
-
-    # HTTP 连接池最大连接数。
-    # 需要覆盖 TransferManager 分片并发 + 普通业务请求并发。
-    max-connections: ${AWS_S3_MAX_CONNECTIONS:200}
-
-    # TCP/TLS 建连超时，单位毫秒。
-    connection-timeout-ms: ${AWS_S3_CONNECTION_TIMEOUT_MS:5000}
-
-    # Socket 读写超时，单位毫秒。
-    # 大文件上传不要设置过低，避免网络瞬时无数据导致分片超时。
-    socket-timeout-ms: ${AWS_S3_SOCKET_TIMEOUT_MS:120000}
-
-    # 连接在连接池中允许空闲的最长时间，单位毫秒。
-    connection-max-idle-ms: ${AWS_S3_CONNECTION_MAX_IDLE_MS:60000}
-
-    # 连接空闲超过该值后，从连接池取出时进行 stale connection 校验。
-    validate-after-inactivity-ms: ${AWS_S3_VALIDATE_AFTER_INACTIVITY_MS:5000}
-
-    # 单条连接最大生命周期，单位毫秒。
-    # 用于定期轮换连接，降低 LB/DNS 变化导致复用旧连接的问题。
-    connection-ttl-ms: ${AWS_S3_CONNECTION_TTL_MS:300000}
-
-    # ============================================================
-    # TCP / 重试
-    # ============================================================
-
-    # TCP KeepAlive。
-    tcp-keep-alive: ${AWS_S3_TCP_KEEP_ALIVE:true}
-
-    # 请求最大自动重试次数。
-    # SDK 使用默认 retry condition + exponential backoff。
-    max-error-retry: ${AWS_S3_MAX_ERROR_RETRY:3}
-
-    # ============================================================
-    # HTTPS
-    # ============================================================
-
-    # 生产环境建议 true。
-    # 如果 MinIO 当前只有 HTTP，则这里必须改为 false，
-    # 同时 endpoint 使用 http://...
+    # 生产环境建议 HTTPS。
+    # endpoint 使用 http:// 时，这里设为 false；endpoint 使用 https:// 时设为 true。
     use-https: ${AWS_S3_USE_HTTPS:true}
 
     # ============================================================
-    # TransferManager / Multipart Upload
+    # 普通 S3Client（同步 API）
     # ============================================================
 
-    # TransferManager 工作线程数。
-    # 每个 multipart 上传会消耗多个 HTTP 连接，因此必须与 max-connections 联动。
-    transfer-threads: ${AWS_S3_TRANSFER_THREADS:16}
+    # 普通同步请求的 HTTP 连接池大小。
+    # 大文件上传主要走 CRT S3AsyncClient，这个值主要服务 HEAD/GET/DELETE/普通 PUT。
+    max-connections: ${AWS_S3_MAX_CONNECTIONS:200}
 
-    # 对象大小超过该值才使用 multipart upload，单位 MB。
-    multipart-threshold-mb: ${AWS_S3_MULTIPART_THRESHOLD_MB:32}
+    # TCP/TLS 建连超时，毫秒。
+    connection-timeout-ms: ${AWS_S3_CONNECTION_TIMEOUT_MS:5000}
 
-    # 每个 multipart part 的最小大小，单位 MB。
-    # AWS SDK 1.12.797 对应 API：withMinimumUploadPartSize(bytes)。
-    multipart-part-size-mb: ${AWS_S3_MULTIPART_PART_SIZE_MB:16}
+    # 单次 API attempt 超时，毫秒。
+    # 不建议为了 800GB 文件把这个值无限增大；大文件会被拆成 multipart part。
+    api-call-attempt-timeout-ms: ${AWS_S3_API_CALL_ATTEMPT_TIMEOUT_MS:120000}
 
-    # false = 允许 TransferManager 并行下载 multipart 对象。
-    disable-parallel-downloads: ${AWS_S3_DISABLE_PARALLEL_DOWNLOADS:false}
+    # 单个 API 调用总超时，包含重试；毫秒。
+    api-call-timeout-ms: ${AWS_S3_API_CALL_TIMEOUT_MS:180000}
 
-    # 是否强制计算 multipart MD5。
-    # Object Lock 等场景可能需要；普通 MinIO 上传通常保持 false。
-    always-calculate-multipart-md5: ${AWS_S3_ALWAYS_CALCULATE_MULTIPART_MD5:false}
+    # 普通 S3Client 最大 attempts = max-retries + 1。
+    max-retries: ${AWS_S3_MAX_RETRIES:3}
+
+    # ============================================================
+    # AWS SDK 2.x / CRT Multipart
+    # ============================================================
+
+    # multipart 触发阈值，单位 MB。
+    # 超过该大小自动走 multipart。
+    multipart-threshold-mb: ${AWS_S3_MULTIPART_THRESHOLD_MB:128}
+
+    # multipart part 最小大小，单位 MB。
+    #
+    # 重点：800GB 大文件不能继续使用 16MB part。
+    # S3 multipart 最多 10,000 parts；800GiB / 10,000 ≈ 82MiB。
+    # 这里默认 128MiB，约 6,400 个 part，留有余量。
+    multipart-part-size-mb: ${AWS_S3_MULTIPART_PART_SIZE_MB:128}
+
+    # CRT S3 单次传输最大并发连接数。
+    # 后续压测 800GB 时需要结合 CPU、内存、MinIO 节点和网卡调整。
+    max-concurrency: ${AWS_S3_MAX_CONCURRENCY:16}
+
+    # CRT 目标吞吐，Gbps。
+    # 这是性能调优目标，不是硬性保证；受机器网卡、MinIO 集群、LB 等限制。
+    target-throughput-gbps: ${AWS_S3_TARGET_THROUGHPUT_GBPS:5.0}
 
     # ============================================================
     # Bucket 生命周期
     # ============================================================
 
-    # 生产环境建议 false，由 Terraform/Ansible/运维脚本提前创建 bucket。
+    # 生产环境建议 false，由 IaC/运维提前创建 bucket。
     auto-create-bucket: ${AWS_S3_AUTO_CREATE_BUCKET:false}
