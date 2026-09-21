@@ -76,3 +76,11 @@ aws:
 
     # 生产环境建议 false，由 IaC/运维提前创建 bucket。
     auto-create-bucket: ${AWS_S3_AUTO_CREATE_BUCKET:false}
+
+# ============================================================
+# dataset_record_info -> ds_dataset 文件复制
+# ============================================================
+dataset:
+  copy:
+    # 目标 MinIO bucket（固定值由部署环境注入）
+    target-bucket: ${DATASET_COPY_TARGET_BUCKET:}
