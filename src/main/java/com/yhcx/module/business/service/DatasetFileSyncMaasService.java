@@ -30,7 +30,7 @@ import java.util.Map;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class DatasetFileCopyService {
+public class DatasetFileSyncMaasService {
 
     private final DatasetRecordInfoMapper datasetRecordInfoMapper;
     private final S3Client sourceS3Client;
@@ -71,8 +71,6 @@ public class DatasetFileCopyService {
         log.info("[DatasetCopy] start, datasetRecordId={}, dsDatasetId={}, sourceBucket={}, sourcePrefix={}, targetBucket={}, targetRootPath={}",
                 datasetRecordId, dsDatasetId, sourcePath.bucket, sourcePath.prefix,
                 copyProperties.getTargetBucket(), targetRootPath);
-
-        targetStorage.createDatasetRoot(copyProperties.getTargetBucket(), targetRootPath, dsDatasetId);
 
         ListObjectsV2Request request = ListObjectsV2Request.builder()
                 .bucket(sourcePath.bucket)

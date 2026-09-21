@@ -24,7 +24,7 @@ public class DatasetRecordInfoDO {
 
     /** 主键：数据集唯一 ID */
     @TableId(type = IdType.AUTO)
-    private Integer id;
+    private Long id;
 
     /** 租户 ID */
     private Long tenantId;

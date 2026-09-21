@@ -1,13 +1,7 @@
 package com.yhcx.module.business.service;
 
 import com.amazonaws.services.s3.AmazonS3Client;
-import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
-import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
-import com.amazonaws.services.s3.model.InitiateMultipartUploadResult;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PartETag;
-import com.amazonaws.services.s3.model.PutObjectRequest;
-import com.amazonaws.services.s3.model.UploadPartRequest;
+import com.amazonaws.services.s3.model.*;
 import com.yhcx.framework.file.core.service.S3FileStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,21 +29,8 @@ public class LegacyS3FileStorageTarget {
 
     private final S3FileStorageService s3FileStorageService;
 
-    /**
-     * 旧版 putObject(String, String, String, Map) 的实际语义是创建 0 字节目录对象，
-     * 因此这里用于创建 dataset 根目录并写入 metadata。
-     */
-    public void createDatasetRoot(String bucketName, String rootPath, Long datasetId) {
-        if (!StringUtils.hasText(bucketName) || !StringUtils.hasText(rootPath)) {
-            throw new IllegalArgumentException("目标 bucket 和 rootPath 不能为空");
-        }
-
-        s3FileStorageService.putObject(
-                bucketName,
-                normalize(rootPath),
-                "/",
-                Map.of("dataset", String.valueOf(datasetId))
-        );
+    public AmazonS3Client getS3Client() {
+        return s3FileStorageService.getS3Client();
     }
 
     /**
@@ -125,12 +106,12 @@ public class LegacyS3FileStorageTarget {
                 }
 
                 PartETag partETag = client.uploadPart(new UploadPartRequest()
-                        .withBucketName(bucketName)
-                        .withKey(targetKey)
-                        .withUploadId(uploadId)
-                        .withPartNumber(partNumber)
-                        .withInputStream(new ByteArrayInputStream(buffer, 0, expected))
-                        .withPartSize(expected))
+                                .withBucketName(bucketName)
+                                .withKey(targetKey)
+                                .withUploadId(uploadId)
+                                .withPartNumber(partNumber)
+                                .withInputStream(new ByteArrayInputStream(buffer, 0, expected))
+                                .withPartSize(expected))
                         .getPartETag();
 
                 partETags.add(partETag);
@@ -142,7 +123,9 @@ public class LegacyS3FileStorageTarget {
                     bucketName, targetKey, uploadId, partETags));
         } catch (Exception e) {
             try {
-                client.abortMultipartUpload(bucketName, targetKey, uploadId);
+                AbortMultipartUploadRequest uploadRequest = new AbortMultipartUploadRequest(
+                        bucketName, targetKey, uploadId);
+                client.abortMultipartUpload(uploadRequest);
             } catch (Exception abortException) {
                 log.error("[DatasetCopy] abort target multipart upload failed, bucket={}, key={}, uploadId={}",
                         bucketName, targetKey, uploadId, abortException);
