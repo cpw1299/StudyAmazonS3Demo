@@ -24,8 +24,6 @@ import com.yhcx.module.business.framework.AmazonS3Properties;
 
 import java.io.File;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 
 /**
