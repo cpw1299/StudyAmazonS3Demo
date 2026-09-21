@@ -17,7 +17,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.transfer.s3.S3TransferManager;
-import software.amazon.awssdk.http.apache.ApacheHttpClient;
+import software.amazon.awssdk.http.apache5.Apache5HttpClient;
 
 import java.net.URI;
 import java.time.Duration;
@@ -49,7 +49,7 @@ public class AmazonS3Config {
     public S3Client s3Client(AmazonS3Properties props) {
         AwsCredentialsProvider credentialsProvider = resolveCredentialsProvider(props);
 
-        ApacheHttpClient.Builder httpClientBuilder = ApacheHttpClient.builder()
+        Apache5HttpClient.Builder httpClientBuilder = Apache5HttpClient.builder()
                 .maxConnections(props.getMaxConnections())
                 .connectionTimeout(Duration.ofMillis(props.getConnectionTimeoutMs()));
 
