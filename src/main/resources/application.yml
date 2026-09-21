@@ -25,9 +25,6 @@ aws:
     # 因此 MinIO 建议显式开启。
     path-style-access: ${AWS_S3_PATH_STYLE:true}
 
-    # 生产环境建议 HTTPS。
-    # endpoint 使用 http:// 时，这里设为 false；endpoint 使用 https:// 时设为 true。
-    use-https: ${AWS_S3_USE_HTTPS:true}
 
     # ============================================================
     # 普通 S3Client（同步 API）
