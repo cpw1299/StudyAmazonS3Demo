@@ -3,9 +3,10 @@ package com.yhcx.module.business.service;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.yhcx.module.business.dal.dataobject.DatasetRecordInfoDO;
-import com.yhcx.module.business.dal.mysql.DatasetRecordInfoMapper;
 import com.yhcx.module.business.framework.AmazonS3Properties;
 import com.yhcx.module.business.framework.DatasetCopyProperties;
+import com.yhcx.module.business.service.bo.SourceTargetBO;
+import com.yhcx.module.business.api.DatasetMaasSaveReqVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,57 +20,69 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.services.s3.paginators.ListObjectsV2Iterable;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 /**
  * dataset_record_info -> ds_dataset 的文件复制服务。
  *
- * <p>本模块只负责读取 dataset_record_info 和复制对象，不查询或新增 ds_dataset。
- * 调用方创建 ds_dataset 后，将其主键和根路径传入本服务。</p>
+ * <p>本服务只负责根据调用方传入的 source/target 信息复制对象，
+ * 不再查询 dataset_record_info，也不查询或新增 ds_dataset。</p>
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class DatasetFileSyncMaasService {
 
-    private final DatasetRecordInfoMapper datasetRecordInfoMapper;
     private final S3Client sourceS3Client;
     private final AmazonS3Properties sourceProperties;
     private final DatasetCopyProperties copyProperties;
     private final LegacyS3FileStorageTarget targetStorage;
 
     /**
-     * 复制一个 dataset_record_info 对应的全部文件。
+     * 批量复制 dataset_record_info 对应的全部文件。
      *
-     * @param datasetRecordId dataset_record_info.id
-     * @param dsDatasetId ds_dataset.id，由调用方创建后传入
-     * @param targetRootPath ds_dataset 对应的目标根路径，由调用方传入
+     * <p>source 和 target 已由上游同步服务组装到 SourceTargetBO 中，
+     * 本服务不再通过 dataset_record_info.id 查询源数据。</p>
      */
-    public void copyDatasetFiles(Integer datasetRecordId,
-                                 Long dsDatasetId,
-                                 String targetRootPath) {
-        if (datasetRecordId == null || dsDatasetId == null) {
-            throw new IllegalArgumentException("datasetRecordId 和 dsDatasetId 不能为空");
+    public void copyDatasetFiles(List<SourceTargetBO> boList) {
+        if (boList == null || boList.isEmpty()) {
+            return;
+        }
+        for (SourceTargetBO bo : boList) {
+            copyDatasetFiles(bo);
+        }
+    }
+
+    private void copyDatasetFiles(SourceTargetBO bo) {
+        if (bo == null || bo.getSource() == null || bo.getTarget() == null) {
+            throw new IllegalArgumentException("sourceTargetBO、source、target 不能为空");
+        }
+
+        DatasetRecordInfoDO source = bo.getSource();
+        DatasetMaasSaveReqVO target = bo.getTarget();
+
+        Long dsDatasetId = target.getId();
+        String targetRootPath = target.getStorageDir();
+
+        if (source.getId() == null || dsDatasetId == null) {
+            throw new IllegalArgumentException("source.id 和 target.id 不能为空");
         }
         if (!StringUtils.hasText(targetRootPath)) {
-            throw new IllegalArgumentException("targetRootPath 不能为空");
+            throw new IllegalArgumentException("target.storageDir 不能为空, dsDatasetId=" + dsDatasetId);
         }
         if (!StringUtils.hasText(copyProperties.getTargetBucket())) {
             throw new IllegalStateException("dataset.copy.target-bucket 未配置");
         }
-
-        DatasetRecordInfoDO record = datasetRecordInfoMapper.selectById(datasetRecordId);
-        if (record == null) {
-            throw new IllegalArgumentException("dataset_record_info 不存在, id=" + datasetRecordId);
-        }
-        if (!StringUtils.hasText(record.getDatasetStoragePath())) {
-            throw new IllegalArgumentException("dataset_storage_path 不能为空, id=" + datasetRecordId);
+        if (!StringUtils.hasText(source.getDatasetStoragePath())) {
+            throw new IllegalArgumentException(
+                    "dataset_storage_path 不能为空, id=" + source.getId());
         }
 
-        SourcePath sourcePath = resolveSourcePath(record.getDatasetStoragePath());
+        SourcePath sourcePath = resolveSourcePath(source.getDatasetStoragePath());
 
         log.info("[DatasetCopy] start, datasetRecordId={}, dsDatasetId={}, sourceBucket={}, sourcePrefix={}, targetBucket={}, targetRootPath={}",
-                datasetRecordId, dsDatasetId, sourcePath.bucket, sourcePath.prefix,
+                source.getId(), dsDatasetId, sourcePath.bucket, sourcePath.prefix,
                 copyProperties.getTargetBucket(), targetRootPath);
 
         ListObjectsV2Request request = ListObjectsV2Request.builder()
@@ -107,7 +120,7 @@ public class DatasetFileSyncMaasService {
         }
 
         log.info("[DatasetCopy] completed, datasetRecordId={}, dsDatasetId={}, fileCount={}, totalBytes={}",
-                datasetRecordId, dsDatasetId, fileCount, totalBytes);
+                source.getId(), dsDatasetId, fileCount, totalBytes);
     }
 
     private void copySingleObject(String sourceBucket,
