@@ -1,25 +1,104 @@
 aws:
   s3:
+    # ============================================================
+    # 基础连接
+    # ============================================================
+
+    # S3 签名 Region。
+    # MinIO 必须与服务端 region/签名配置保持一致；如果未特别配置，通常使用 us-east-1。
     region: ${AWS_REGION:us-east-1}
-    # 对接 MinIO / 私有化对象存储时填写，如 http://minio.internal:9000；标准 AWS 留空
+
+    # MinIO API 地址，例如：
+    #   https://minio.example.com:9000
+    # 生产环境不要写 localhost；通过环境变量/K8s ConfigMap 注入。
     endpoint: ${AWS_S3_ENDPOINT:}
-    # 生产环境严禁硬编码，通过环境变量 / K8s Secret / Vault 注入
-    # 两者都留空时，自动回退到默认凭证链（EC2 IAM Role / ECS Task Role），这是 AWS 上的最佳实践
+
+    # Access Key / Secret Key。
+    # 生产环境不要硬编码，建议使用 K8s Secret、Vault 或环境变量。
     access-key: ${AWS_ACCESS_KEY_ID:}
     secret-key: ${AWS_SECRET_ACCESS_KEY:}
+
+    # 默认 bucket。生产建议提前创建，不让应用启动时自动创建。
     default-bucket: ${AWS_S3_BUCKET:my-app-bucket}
-    # MinIO / 自建对象存储必须为 true；标准 AWS 一般为 false
-    path-style-access: ${AWS_S3_PATH_STYLE:false}
-    chunked-encoding-enabled: true
-    # ---- 连接池与超时（按业务并发量调整）----
-    max-connections: 200
-    connection-timeout-ms: 5000
-    socket-timeout-ms: 30000
-    connection-ttl-ms: 60000
-    max-error-retry: 3
-    tcp-keep-alive: true
-    use-https: true
-    # ---- 大文件分片上传 ----
-    multipart-threshold-mb: 16
-    multipart-part-size-mb: 16
-    auto-create-bucket: false
+
+    # MinIO 推荐 true：
+    # 请求形式为 /bucket/object，避免虚拟主机式 bucket DNS/证书问题。
+    path-style-access: ${AWS_S3_PATH_STYLE:true}
+
+    # MinIO 兼容性优先时关闭 chunked encoding。
+    # 关闭后 SDK 更容易与部分代理/LB/S3 兼容实现协作。
+    chunked-encoding-enabled: ${AWS_S3_CHUNKED_ENCODING:false}
+
+    # ============================================================
+    # HTTP 连接池
+    # ============================================================
+
+    # HTTP 连接池最大连接数。
+    # 需要覆盖 TransferManager 分片并发 + 普通业务请求并发。
+    max-connections: ${AWS_S3_MAX_CONNECTIONS:200}
+
+    # TCP/TLS 建连超时，单位毫秒。
+    connection-timeout-ms: ${AWS_S3_CONNECTION_TIMEOUT_MS:5000}
+
+    # Socket 读写超时，单位毫秒。
+    # 大文件上传不要设置过低，避免网络瞬时无数据导致分片超时。
+    socket-timeout-ms: ${AWS_S3_SOCKET_TIMEOUT_MS:120000}
+
+    # 连接在连接池中允许空闲的最长时间，单位毫秒。
+    connection-max-idle-ms: ${AWS_S3_CONNECTION_MAX_IDLE_MS:60000}
+
+    # 连接空闲超过该值后，从连接池取出时进行 stale connection 校验。
+    validate-after-inactivity-ms: ${AWS_S3_VALIDATE_AFTER_INACTIVITY_MS:5000}
+
+    # 单条连接最大生命周期，单位毫秒。
+    # 用于定期轮换连接，降低 LB/DNS 变化导致复用旧连接的问题。
+    connection-ttl-ms: ${AWS_S3_CONNECTION_TTL_MS:300000}
+
+    # ============================================================
+    # TCP / 重试
+    # ============================================================
+
+    # TCP KeepAlive。
+    tcp-keep-alive: ${AWS_S3_TCP_KEEP_ALIVE:true}
+
+    # 请求最大自动重试次数。
+    # SDK 使用默认 retry condition + exponential backoff。
+    max-error-retry: ${AWS_S3_MAX_ERROR_RETRY:3}
+
+    # ============================================================
+    # HTTPS
+    # ============================================================
+
+    # 生产环境建议 true。
+    # 如果 MinIO 当前只有 HTTP，则这里必须改为 false，
+    # 同时 endpoint 使用 http://...
+    use-https: ${AWS_S3_USE_HTTPS:true}
+
+    # ============================================================
+    # TransferManager / Multipart Upload
+    # ============================================================
+
+    # TransferManager 工作线程数。
+    # 每个 multipart 上传会消耗多个 HTTP 连接，因此必须与 max-connections 联动。
+    transfer-threads: ${AWS_S3_TRANSFER_THREADS:16}
+
+    # 对象大小超过该值才使用 multipart upload，单位 MB。
+    multipart-threshold-mb: ${AWS_S3_MULTIPART_THRESHOLD_MB:32}
+
+    # 每个 multipart part 的最小大小，单位 MB。
+    # AWS SDK 1.12.797 对应 API：withMinimumUploadPartSize(bytes)。
+    multipart-part-size-mb: ${AWS_S3_MULTIPART_PART_SIZE_MB:16}
+
+    # false = 允许 TransferManager 并行下载 multipart 对象。
+    disable-parallel-downloads: ${AWS_S3_DISABLE_PARALLEL_DOWNLOADS:false}
+
+    # 是否强制计算 multipart MD5。
+    # Object Lock 等场景可能需要；普通 MinIO 上传通常保持 false。
+    always-calculate-multipart-md5: ${AWS_S3_ALWAYS_CALCULATE_MULTIPART_MD5:false}
+
+    # ============================================================
+    # Bucket 生命周期
+    # ============================================================
+
+    # 生产环境建议 false，由 Terraform/Ansible/运维脚本提前创建 bucket。
+    auto-create-bucket: ${AWS_S3_AUTO_CREATE_BUCKET:false}
