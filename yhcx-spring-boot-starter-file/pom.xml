@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>com.yhcx.boot</groupId>
+        <artifactId>yhcx-framework</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>yhcx-spring-boot-starter-file</artifactId>
+    <packaging>jar</packaging>
+
+    <name>${project.artifactId}</name>
+    <description>file 扩展</description>
+
+    <properties>
+        <httpclient.version>4.5.14</httpclient.version>
+        <commons-pool2.version>2.12.0</commons-pool2.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.yhcx.boot</groupId>
+            <artifactId>yhcx-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.yhcx.boot</groupId>
+            <artifactId>yhcx-module-infra-biz</artifactId>
+            <version>${revision}</version>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- Web 相关 -->
+        <dependency>
+            <groupId>com.yhcx.boot</groupId>
+            <artifactId>yhcx-spring-boot-starter-web</artifactId>
+            <scope>provided</scope> <!-- 设置为 provided，只有 OncePerRequestFilter 使用到 -->
+        </dependency>
+        <!-- 文件上传 -->
+        <dependency>
+            <groupId>com.yhcx.boot</groupId>
+            <artifactId>yhcx-spring-boot-starter-webdav</artifactId>
+            <version>${revision}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>1.26.1</version>
+        </dependency>
+        <!-- Web 相关 -->
+        <dependency>
+            <groupId>com.yhcx.boot</groupId>
+            <artifactId>yhcx-spring-boot-starter-redis</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.yhcx.boot</groupId>
+            <artifactId>yhcx-spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+            <version>1.3.2</version>
+        </dependency>
+
+        <!-- RAR 使用 -->
+        <dependency>
+            <groupId>com.github.junrar</groupId>
+            <artifactId>junrar</artifactId>
+            <version>7.6.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-core</artifactId> <!-- 文件客户端：文件类型的识别 -->
+        </dependency>
+
+        <!-- openFeign -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.openfeign</groupId>
+            <artifactId>feign-okhttp</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+        </dependency>
+
+        <!-- maven -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>1.26.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.16.1</version>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <!-- 设置构建的 jar 包名 -->
+        <finalName>${project.artifactId}</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>11</source>
+                    <target>11</target>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
