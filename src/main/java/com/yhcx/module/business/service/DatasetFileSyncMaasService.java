@@ -6,7 +6,7 @@ import com.yhcx.module.business.dal.dataobject.DatasetRecordInfoDO;
 import com.yhcx.module.business.framework.AmazonS3Properties;
 import com.yhcx.module.business.framework.DatasetCopyProperties;
 import com.yhcx.module.business.service.bo.SourceTargetBO;
-import com.yhcx.module.business.api.DatasetMaasSaveReqVO;
+import com.yhcx.module.business.vo.DatasetMaasSaveReqVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -61,6 +61,10 @@ public class DatasetFileSyncMaasService {
 
         DatasetRecordInfoDO source = bo.getSource();
         DatasetMaasSaveReqVO target = bo.getTarget();
+        // source 旧数据集的文件路径：datacentermgr-web/PRIVATE/20/19/，这三个层级必然存在 PRIVATE/20/19/，是动态值
+        // source 旧数据集的文件路径中 datacentermgr-web/ 是固定值
+        // target 新数据集的文件路径：/dataset/10/2/3/9-18标注
+        // target 新数据集的文件路径中 /dataset/10/ 是固定值，这三个层级必然存在 2/3/9-18标注，是动态值
 
         Long dsDatasetId = target.getId();
         String targetRootPath = target.getStorageDir();
