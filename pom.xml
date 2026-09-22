@@ -3,95 +3,164 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <parent>
-        <groupId>com.yhcx.boot</groupId>
-        <artifactId>yhcx-module-business</artifactId>
-        <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
-    </parent>
-
-    <artifactId>yhcx-module-business-sync-data</artifactId>
-    <packaging>jar</packaging>
+    <groupId>com.yhcx.boot</groupId>
+    <artifactId>company-datascope-backend</artifactId>
+    <version>${revision}</version>
+    <packaging>pom</packaging>
+    <modules>
+        <module>yhcx-dependencies</module>
+        <module>yhcx-framework</module>
+        <!-- Server 主项目 -->
+        <module>yhcx-server</module>
+        <!-- 各种 module 拓展 -->
+        <module>yhcx-module-system</module>
+        <module>yhcx-module-infra</module>
+        <module>yhcx-module-business</module>
+        <module>yhcx-module-workflow</module>
+    </modules>
 
     <name>${project.artifactId}</name>
-    <description>
-        同步数据
-    </description>
+    <description>银河创想项目基础脚手架</description>
+    <url>https://github.com/YunaiV/ruoyi-vue-pro</url>
 
     <properties>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
+        <revision>2.4.0</revision>
+        <!-- Maven 相关 -->
+        <java.version>11</java.version>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <maven-surefire-plugin.version>3.0.0-M5</maven-surefire-plugin.version>
+        <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+        <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
+        <!-- 看看咋放到 bom 里 -->
+        <lombok.version>1.18.36</lombok.version>
+        <spring.boot.version>2.7.18</spring.boot.version>
+        <spring.cloud.version>2021.0.5</spring.cloud.version>
+        <mapstruct.version>1.6.3</mapstruct.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <aws-sdk.version>2.55.0</aws-sdk.version>
-        <aws-crt.version>0.48.4</aws-crt.version>
-        <mybatis-plus.version>3.5.9</mybatis-plus.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>software.amazon.awssdk</groupId>
-                <artifactId>bom</artifactId>
-                <version>${aws-sdk.version}</version>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring.cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.yhcx.boot</groupId>
+                <artifactId>yhcx-dependencies</artifactId>
+                <version>${revision}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
 
-    <dependencies>
-        <dependency>
-            <groupId>com.yhcx.boot</groupId>
-            <artifactId>yhcx-module-business-api</artifactId>
-            <version>${revision}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.yhcx.boot</groupId>
-            <artifactId>yhcx-module-system-api</artifactId>
-            <version>${revision}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.yhcx.boot</groupId>
-            <artifactId>yhcx-module-infra-api</artifactId>
-            <version>${revision}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot</artifactId>
-        </dependency>
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- maven-surefire-plugin 插件，用于运行单元测试。 -->
+                <!-- 注意，需要使用 3.0.X+，因为要支持 Junit 5 版本 -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven-surefire-plugin.version}</version>
+                </plugin>
+                <!-- maven-compiler-plugin 插件，解决 spring-boot-configuration-processor + Lombok + MapStruct 组合 -->
+                <!-- https://stackoverflow.com/questions/33483697/re-run-spring-boot-configuration-annotation-processor-to-update-generated-metada -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${maven-compiler-plugin.version}</version>
+                    <configuration>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.springframework.boot</groupId>
+                                <artifactId>spring-boot-configuration-processor</artifactId>
+                                <version>${spring.boot.version}</version>
+                            </path>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                            <path>
+                                <groupId>org.mapstruct</groupId>
+                                <artifactId>mapstruct-processor</artifactId>
+                                <version>${mapstruct.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>flatten-maven-plugin</artifactId>
+                </plugin>
+            </plugins>
+        </pluginManagement>
 
-        <!-- AWS SDK for Java 2.x -->
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>s3</artifactId>
-        </dependency>
-        <!-- Apache HttpClient 5.x：AWS SDK 2.x 推荐的同步 HTTP Client -->
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>apache5-client</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>s3-transfer-manager</artifactId>
-        </dependency>
+        <plugins>
+            <!-- 统一 revision 版本 -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <version>${flatten-maven-plugin.version}</version>
+                <configuration>
+                    <flattenMode>oss</flattenMode>
+                    <updatePomFile>true</updatePomFile>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>flatten</goal>
+                        </goals>
+                        <id>flatten</id>
+                        <phase>process-resources</phase>
+                    </execution>
+                    <execution>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                        <id>flatten.clean</id>
+                        <phase>clean</phase>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 
-        <!-- AWS CRT-based S3 client：大文件/高吞吐上传使用 -->
-        <dependency>
-            <groupId>software.amazon.awssdk.crt</groupId>
-            <artifactId>aws-crt</artifactId>
-            <version>${aws-crt.version}</version>
-        </dependency>
+    <!-- 使用 huawei / aliyun 的 Maven 源，提升下载速度 -->
+    <repositories>
+        <repository>
+            <id>huaweicloud</id>
+            <name>huawei</name>
+            <url>https://mirrors.huaweicloud.com/repository/maven/</url>
+        </repository>
+        <repository>
+            <id>aliyunmaven</id>
+            <name>aliyun</name>
+            <url>https://maven.aliyun.com/repository/public</url>
+        </repository>
 
-        <dependency>
-            <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus</artifactId>
-            <version>${mybatis-plus.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>com.yhcx.boot</groupId>
-            <artifactId>yhcx-spring-boot-starter-file</artifactId>
-        </dependency>
-    </dependencies>
+        <repository>
+            <id>spring-milestones</id>
+            <name>Spring Milestones</name>
+            <url>https://repo.spring.io/milestone</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <repository>
+            <id>spring-snapshots</id>
+            <name>Spring Snapshots</name>
+            <url>https://repo.spring.io/snapshot</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+        </repository>
+    </repositories>
 
 </project>

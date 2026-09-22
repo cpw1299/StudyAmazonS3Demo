@@ -97,6 +97,40 @@
                 <profiles.active>test</profiles.active>
             </properties>
         </profile>
+        <profile>
+            <!-- docker 环境 -->
+            <id>docker</id>
+            <properties>
+                <profiles.active>docker</profiles.active>
+            </properties>
+            <build>
+                <resources>
+                    <!-- 始终包含的资源 -->
+                    <resource>
+                        <directory>src/main/resources</directory>
+                        <includes>
+                            <include>application.yaml</include>
+                            <include>logback-spring.xml</include>
+                            <include>templates/**</include>
+                        </includes>
+                    </resource>
+                    <!-- 根据激活的 profile 包含对应的配置文件 -->
+                    <resource>
+                        <directory>src/main/resources</directory>
+                        <includes>
+                            <include>application-${profiles.active}.yaml</include>
+                        </includes>
+                    </resource>
+                </resources>
+            </build>
+        </profile>
+        <profile>
+            <!-- zhuzhou 环境 -->
+            <id>zhuzhou</id>
+            <properties>
+                <profiles.active>zhuzhou</profiles.active>
+            </properties>
+        </profile>
     </profiles>
 
     <build>
