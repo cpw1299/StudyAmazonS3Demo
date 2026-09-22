@@ -1009,6 +1009,158 @@ public class S3FileStorageServiceImpl implements S3FileStorageService {
                 getDomain(s3FileClientConfig.getDomain()) + storagePath, null);
     }
 
+    /**
+     * 流式上传文件：小文件使用 PutObject，大文件使用 Multipart Upload。
+     *
+     * <p>该方法直接消费调用方提供的 InputStream，不会把整个文件落到本地磁盘。
+     * Multipart 模式按分片读取输入流，每次只在内存中保留当前分片。</p>
+     */
+    @Override
+    public void upload(String bucketName, String rootPath, String path,
+                       InputStream inputStream, long contentLength, String contentType,
+                       Map<String, String> metadata) throws IOException {
+        if (StrUtil.isBlank(bucketName)) {
+            throw new IllegalArgumentException("bucketName不能为空");
+        }
+        if (inputStream == null) {
+            throw new IllegalArgumentException("inputStream不能为空");
+        }
+        if (contentLength < 0) {
+            throw new IllegalArgumentException("contentLength不能小于0");
+        }
+
+        String storagePath = Tools.join(false, rootPath, path);
+        if (StrUtil.isBlank(storagePath)) {
+            throw new IllegalArgumentException("文件路径不能为空");
+        }
+
+        // S3 单次 PutObject 的对象大小上限为 5GB；超过该值必须使用 Multipart Upload。
+        if (contentLength <= MAX_DIRECT_COPY) {
+            ObjectMetadata objectMetadata = buildStreamUploadMetadata(contentLength, contentType, metadata);
+            s3FileClient.putObject(new PutObjectRequest(
+                    bucketName, storagePath, inputStream, objectMetadata));
+            log.info("[S3流式上传] PutObject完成 bucket={},key={},size={}",
+                    bucketName, storagePath, contentLength);
+            return;
+        }
+
+        uploadLargeStreamMultipart(bucketName, storagePath, inputStream,
+                contentLength, contentType, metadata);
+    }
+
+    /**
+     * 大文件 Multipart Upload。
+     *
+     * <p>默认 128MB 一个 part；如果文件超过 128MB * 10000，自动增大 part，
+     * 保证分片数量不超过 S3 的 10000 上限。每个 part 使用独立 byte[]，
+     * 上传完成后立即复用该缓冲区，不创建本地临时文件。</p>
+     */
+    private void uploadLargeStreamMultipart(String bucketName, String storagePath,
+                                            InputStream inputStream, long contentLength,
+                                            String contentType, Map<String, String> metadata)
+            throws IOException {
+        long partSize = calculateMultipartPartSize(contentLength);
+        InitiateMultipartUploadRequest initRequest = new InitiateMultipartUploadRequest(
+                bucketName, storagePath);
+        initRequest.setObjectMetadata(buildStreamUploadMetadata(null, contentType, metadata));
+
+        String uploadId = null;
+        List<PartETag> partETags = new ArrayList<>();
+        long uploadedBytes = 0L;
+        int partNumber = 1;
+
+        try {
+            uploadId = s3FileClient.initiateMultipartUpload(initRequest).getUploadId();
+            log.info("[S3大文件Multipart] 初始化成功 bucket={},key={},uploadId={},partSize={},contentLength={}",
+                    bucketName, storagePath, uploadId, partSize, contentLength);
+
+            while (uploadedBytes < contentLength) {
+                int currentPartSize = (int) Math.min(partSize, contentLength - uploadedBytes);
+                byte[] partBuffer = new byte[currentPartSize];
+                int offset = 0;
+
+                while (offset < currentPartSize) {
+                    int read = inputStream.read(partBuffer, offset, currentPartSize - offset);
+                    if (read < 0) {
+                        throw new EOFException("源文件流提前结束，expected=" + contentLength
+                                + ", actual=" + uploadedBytes + offset);
+                    }
+                    if (read == 0) {
+                        continue;
+                    }
+                    offset += read;
+                }
+
+                PartETag partETag = s3FileClient.uploadPart(new UploadPartRequest()
+                                .withBucketName(bucketName)
+                                .withKey(storagePath)
+                                .withUploadId(uploadId)
+                                .withPartNumber(partNumber)
+                                .withInputStream(new ByteArrayInputStream(partBuffer, 0, currentPartSize))
+                                .withPartSize(currentPartSize))
+                        .getPartETag();
+
+                partETags.add(partETag);
+                uploadedBytes += currentPartSize;
+                log.debug("[S3大文件Multipart] part上传完成 bucket={},key={},partNumber={},partSize={},uploadedBytes={}/{}",
+                        bucketName, storagePath, partNumber, currentPartSize, uploadedBytes, contentLength);
+
+                partNumber++;
+                if (partNumber > MAX_PART_COUNT + 1 && uploadedBytes < contentLength) {
+                    throw new IllegalStateException("Multipart分片数量超过S3最大限制: " + MAX_PART_COUNT);
+                }
+            }
+
+            s3FileClient.completeMultipartUpload(new CompleteMultipartUploadRequest(
+                    bucketName, storagePath, uploadId, partETags));
+            log.info("[S3大文件Multipart] 完成 bucket={},key={},uploadId={},partCount={},size={}",
+                    bucketName, storagePath, uploadId, partETags.size(), contentLength);
+        } catch (Exception e) {
+            if (StrUtil.isNotBlank(uploadId)) {
+                try {
+                    s3FileClient.abortMultipartUpload(new AbortMultipartUploadRequest(
+                            bucketName, storagePath, uploadId));
+                } catch (Exception abortException) {
+                    log.error("[S3大文件Multipart] abort失败 bucket={},key={},uploadId={}",
+                            bucketName, storagePath, uploadId, abortException);
+                }
+            }
+            if (e instanceof IOException) {
+                throw (IOException) e;
+            }
+            throw new IOException("S3大文件Multipart上传失败: " + storagePath, e);
+        }
+    }
+
+    private long calculateMultipartPartSize(long contentLength) {
+        long minimumPartSizeForCount = (contentLength + MAX_PART_COUNT - 1L) / MAX_PART_COUNT;
+        long partSize = Math.max(DEFAULT_PART_SIZE, minimumPartSizeForCount);
+        if (partSize < MIN_PART_SIZE) {
+            partSize = MIN_PART_SIZE;
+        }
+        // S3 单个 part 最大 5GB；当前对象大小和 S3 对象上限下通常不会触发这里。
+        if (partSize > 5L * 1024 * 1024 * 1024) {
+            throw new IllegalArgumentException("Multipart part size超过S3最大限制: " + partSize);
+        }
+        return partSize;
+    }
+
+    private ObjectMetadata buildStreamUploadMetadata(Long contentLength,
+                                                      String contentType,
+                                                      Map<String, String> metadata) {
+        ObjectMetadata objectMetadata = new ObjectMetadata();
+        if (contentLength != null) {
+            objectMetadata.setContentLength(contentLength);
+        }
+        if (StrUtil.isNotBlank(contentType)) {
+            objectMetadata.setContentType(contentType);
+        }
+        if (!CollectionUtils.isEmpty(metadata)) {
+            objectMetadata.setUserMetadata(new HashMap<>(metadata));
+        }
+        return objectMetadata;
+    }
+
     @Override
     public String initiateMultipartUpload(String bucketName, String rootPath, String path, String contentType) {
         String storagePath = Tools.join(false, rootPath, path);
