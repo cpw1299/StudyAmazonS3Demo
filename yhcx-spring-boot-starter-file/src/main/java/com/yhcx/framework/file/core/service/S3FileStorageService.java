@@ -185,6 +185,16 @@ public interface S3FileStorageService {
     FilePresignedUrlRespDTO putFilePresignedUrl(@NotBlank String bucketName, String rootPath, String path);
 
     /**
+     * 从输入流上传文件。
+     *
+     * <p>5GB 以内使用普通 PutObject，超过 5GB 自动使用 Multipart Upload。
+     * 输入流不会被整体加载到内存或写入本地临时文件。</p>
+     */
+    void upload(@NotBlank String bucketName, String rootPath, String path,
+                InputStream inputStream, long contentLength, String contentType,
+                Map<String, String> metadata) throws IOException;
+
+    /**
      * 初始化客户端直传的分片上传
      */
     String initiateMultipartUpload(@NotBlank String bucketName, String rootPath, String path, String contentType);
