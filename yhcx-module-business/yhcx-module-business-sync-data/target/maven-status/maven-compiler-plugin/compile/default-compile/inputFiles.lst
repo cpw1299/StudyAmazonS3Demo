@@ -1,0 +1,16 @@
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\controller\admin\DatasetSyncMaasDataController.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\dal\dataobject\DatasetRecordDetailInfoDO.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\dal\dataobject\DatasetRecordInfoDO.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\dal\mysql\DatasetRecordDetailInfoMapper.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\dal\mysql\DatasetRecordInfoMapper.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\framework\AmazonS3Config.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\framework\AmazonS3Properties.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\framework\DatasetCopyProperties.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\listener\DatasetFileSyncMaasListener.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\listener\event\DatasetSyncMaasEvnet.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\service\AmazonS3StorageService.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\service\bo\SourceTargetBO.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\service\DatasetFileSyncMaasService.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\service\DatasetSyncMaasService.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\service\DatasetSyncMaasServiceImpl.java
+D:\DevelopWorkspace\CRRC\datascope-cloud\company-datascope-platform-backend\yhcx-module-business\yhcx-module-business-sync-data\src\main\java\com\yhcx\module\business\service\LegacyS3FileStorageTarget.java

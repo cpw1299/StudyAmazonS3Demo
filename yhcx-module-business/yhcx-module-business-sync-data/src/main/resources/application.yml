@@ -1,0 +1,86 @@
+#aws:
+#  s3:
+#    # ============================================================
+#    # 基础连接
+#    # ============================================================
+#
+#    # S3 签名 Region。
+#    # 即使使用 MinIO endpoint，SDK 2.x 仍需要 Region 用于签名。
+#    region: ${AWS_REGION:us-east-1}
+#
+#    # MinIO API 地址，例如：
+#    #   https://minio.example.com:9000
+#    # AWS S3 生产环境可留空，让 SDK 根据 Region 自动选择官方 endpoint。
+#    endpoint: ${AWS_S3_ENDPOINT:}
+#
+#    # 生产环境不要硬编码 AK/SK，建议使用 K8s Secret / Vault / IAM Role / 环境变量。
+#    access-key: ${AWS_ACCESS_KEY_ID:}
+#    secret-key: ${AWS_SECRET_ACCESS_KEY:}
+#
+#    # 默认 bucket。生产建议由 Terraform/Ansible/运维提前创建。
+#    default-bucket: ${AWS_S3_BUCKET:my-app-bucket}
+#
+#    # MinIO 通常开启 path-style：/bucket/object。
+#    # AWS SDK 2.x 在 endpointOverride 场景默认可能使用 virtual-hosted-style，
+#    # 因此 MinIO 建议显式开启。
+#    path-style-access: ${AWS_S3_PATH_STYLE:true}
+#
+#
+#    # ============================================================
+#    # 普通 S3Client（同步 API）
+#    # ============================================================
+#
+#    # 普通同步请求的 HTTP 连接池大小。
+#    # 大文件上传主要走 CRT S3AsyncClient，这个值主要服务 HEAD/GET/DELETE/普通 PUT。
+#    max-connections: ${AWS_S3_MAX_CONNECTIONS:200}
+#
+#    # TCP/TLS 建连超时，毫秒。
+#    connection-timeout-ms: ${AWS_S3_CONNECTION_TIMEOUT_MS:5000}
+#
+#    # 单次 API attempt 超时，毫秒。
+#    # 不建议为了 800GB 文件把这个值无限增大；大文件会被拆成 multipart part。
+#    api-call-attempt-timeout-ms: ${AWS_S3_API_CALL_ATTEMPT_TIMEOUT_MS:120000}
+#
+#    # 单个 API 调用总超时，包含重试；毫秒。
+#    api-call-timeout-ms: ${AWS_S3_API_CALL_TIMEOUT_MS:180000}
+#
+#    # 普通 S3Client 最大 attempts = max-retries + 1。
+#    max-retries: ${AWS_S3_MAX_RETRIES:3}
+#
+#    # ============================================================
+#    # AWS SDK 2.x / CRT Multipart
+#    # ============================================================
+#
+#    # multipart 触发阈值，单位 MB。
+#    # 超过该大小自动走 multipart。
+#    multipart-threshold-mb: ${AWS_S3_MULTIPART_THRESHOLD_MB:128}
+#
+#    # multipart part 最小大小，单位 MB。
+#    #
+#    # 重点：800GB 大文件不能继续使用 16MB part。
+#    # S3 multipart 最多 10,000 parts；800GiB / 10,000 ≈ 82MiB。
+#    # 这里默认 128MiB，约 6,400 个 part，留有余量。
+#    multipart-part-size-mb: ${AWS_S3_MULTIPART_PART_SIZE_MB:128}
+#
+#    # CRT S3 单次传输最大并发连接数。
+#    # 后续压测 800GB 时需要结合 CPU、内存、MinIO 节点和网卡调整。
+#    max-concurrency: ${AWS_S3_MAX_CONCURRENCY:16}
+#
+#    # CRT 目标吞吐，Gbps。
+#    # 这是性能调优目标，不是硬性保证；受机器网卡、MinIO 集群、LB 等限制。
+#    target-throughput-gbps: ${AWS_S3_TARGET_THROUGHPUT_GBPS:5.0}
+#
+#    # ============================================================
+#    # Bucket 生命周期
+#    # ============================================================
+#
+#    # 生产环境建议 false，由 IaC/运维提前创建 bucket。
+#    auto-create-bucket: ${AWS_S3_AUTO_CREATE_BUCKET:false}
+#
+## ============================================================
+## dataset_record_info -> ds_dataset 文件复制
+## ============================================================
+#dataset:
+#  copy:
+#    # 目标 MinIO bucket（固定值由部署环境注入）
+#    target-bucket: ${DATASET_COPY_TARGET_BUCKET:}

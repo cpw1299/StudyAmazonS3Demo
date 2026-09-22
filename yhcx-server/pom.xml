@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>com.yhcx.boot</groupId>
+        <artifactId>company-datascope-backend</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.yhcx.boot</groupId>
+    <artifactId>yhcx-server</artifactId>
+    <packaging>jar</packaging>
+
+    <name>${project.artifactId}</name>
+    <description>
+        后端 Server 的主项目，通过引入需要 yhcx-module-xxx 的依赖，
+        从而实现提供 RESTful API 给 yhcx-ui-admin、yhcx-ui-user 等前端项目。
+        本质上来说，它就是个空壳（容器）！
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.yhcx.boot</groupId>
+            <artifactId>yhcx-module-system-biz</artifactId>
+            <version>${revision}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.yhcx.boot</groupId>
+            <artifactId>yhcx-module-infra-biz</artifactId>
+            <version>${revision}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.yhcx.boot</groupId>
+            <artifactId>yhcx-module-business-cloud-biz</artifactId>
+            <version>${revision}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.yhcx.boot</groupId>
+            <artifactId>yhcx-module-business-sync-data</artifactId>
+            <version>${revision}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.yhcx.boot</groupId>
+            <artifactId>yhcx-module-workflow-biz</artifactId>
+            <version>${revision}</version>
+        </dependency>
+        <!-- words-pdf依赖：system scope 不具备传递性，需在 yhcx-server 声明以确保运行时类路径包含 Aspose -->
+        <dependency>
+            <groupId>com.aspose</groupId>
+            <artifactId>aspose-words</artifactId>
+            <version>15.12.0-jdk16</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/../yhcx-module-business/yhcx-module-business-cloud-biz/src/main/resources/lib/aspose-words-15.12.0-jdk16.jar</systemPath>
+        </dependency>
+        <!-- spring boot 配置所需依赖 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- 服务保障相关 -->
+        <dependency>
+            <groupId>com.yhcx.boot</groupId>
+            <artifactId>yhcx-spring-boot-starter-protection</artifactId>
+        </dependency>
+
+    </dependencies>
+
+    <profiles>
+        <profile>
+            <!-- local 环境 -->
+            <id>local</id>
+            <properties>
+                <profiles.active>local</profiles.active>
+            </properties>
+        </profile>
+        <profile>
+            <!-- dev 环境 -->
+            <id>dev</id>
+            <properties>
+                <profiles.active>dev</profiles.active>
+            </properties>
+        </profile>
+        <profile>
+            <!-- 生产环境 -->
+            <id>prod</id>
+            <properties>
+                <profiles.active>prod</profiles.active>
+            </properties>
+        </profile>
+        <profile>
+            <!-- 测试环境 -->
+            <id>test</id>
+            <properties>
+                <profiles.active>test</profiles.active>
+            </properties>
+        </profile>
+    </profiles>
+
+    <build>
+        <!-- 设置构建的 jar 包名 -->
+        <finalName>${project.artifactId}</finalName>
+        <plugins>
+            <plugin>
+                <groupId>com.github.wvengen</groupId>
+                <artifactId>proguard-maven-plugin</artifactId>
+                <version>2.6.0</version>
+                <executions>
+                    <!-- 以下配置说明执行mvn的package命令时候，会执行proguard-->
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>proguard</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <!-- 就是输入Jar的名称，我们要知道，代码混淆其实是将一个原始的jar，生成一个混淆后的jar，那么就会有输入输出。 -->
+                    <injar>${project.build.finalName}.jar</injar>
+                    <!-- 输出jar名称，输入输出jar同名的时候就是覆盖，也是比较常用的配置。 -->
+                    <outjar>${project.build.finalName}.jar</outjar>
+                    <!-- 是否混淆 默认是true -->
+                    <obfuscate>true</obfuscate>
+                    <!-- 配置一个文件，通常叫做proguard.cfg,该文件主要是配置options选项，也就是说使用proguard.cfg那么options下的所有内容都可以移到proguard.cfg中 -->
+                    <proguardInclude>${project.basedir}/proguard.cfg</proguardInclude>
+                    <!-- 对输入jar进行过滤比如，如下配置就是对META-INFO文件不处理。 -->
+                    <inLibsFilter>!META-INF/**,!META-INF/versions/9/**.class</inLibsFilter>
+                    <!-- 这是输出路径配置，但是要注意这个路径必须要包括injar标签填写的jar -->
+                    <outputDirectory>${project.basedir}/target</outputDirectory>
+                    <!--这里特别重要，此处主要是配置混淆的一些细节选项，比如哪些类不需要混淆，哪些需要混淆-->
+                    <options>
+                        <!-- 可以在此处写option标签配置，不过我上面使用了proguardInclude，故而我更喜欢在proguard.cfg中配置 -->
+                    </options>
+                    <putLibraryJarsInTempDir>true</putLibraryJarsInTempDir>
+                </configuration>
+            </plugin>
+            <!-- 打包 -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring.boot.version}</version>
+                <configuration>
+                    <includeSystemScope>true</includeSystemScope>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal> <!-- 将引入的 jar 打入其中 -->
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.spotify</groupId>
+                <artifactId>docker-maven-plugin</artifactId>
+                <version>1.2.2</version>
+                <configuration>
+                    <imageName>yhcx-datascope-server</imageName>
+                    <dockerDirectory>${project.basedir}/src/main/docker</dockerDirectory>
+                    <dockerHost>http://192.168.10.100:2375</dockerHost>
+                    <!-- 如需重复构建相同标签名称的镜像，可将forceTags设为true，这样就会覆盖构建相同标签的镜像。 -->
+                    <forceTags>true</forceTags>
+                    <resources>
+                        <resource>
+                            <targetPath>/</targetPath>
+                            <directory>${project.build.directory}</directory>
+                            <include>${project.build.finalName}-.jar</include>
+                        </resource>
+                    </resources>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

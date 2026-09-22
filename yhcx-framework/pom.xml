@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.yhcx.boot</groupId>
+        <artifactId>company-datascope-backend</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <packaging>pom</packaging>
+    <modules>
+        <module>yhcx-common</module>
+        <!-- 独立的，没有相互依赖 -->
+        <module>yhcx-spring-boot-starter-biz-ip</module>
+        <module>yhcx-spring-boot-starter-job</module>
+        <module>yhcx-spring-boot-starter-monitor</module>
+        <module>yhcx-spring-boot-starter-redis</module>
+
+        <!-- 依赖 yhcx-spring-boot-starter-redis -->
+        <module>yhcx-spring-boot-starter-mq</module>
+
+        <!-- 依赖 yhcx-module-system-api、yhcx-spring-boot-starter-biz-ip -->
+        <module>yhcx-spring-boot-starter-excel</module>
+
+        <!-- 依赖 yhcx-module-system-api、yhcx-module-infra-api -->
+        <module>yhcx-spring-boot-starter-web</module>
+
+        <module>yhcx-spring-boot-starter-webdav</module>
+        <module>yhcx-spring-boot-starter-file</module>
+
+        <!-- 依赖 yhcx-spring-boot-starter-web -->
+        <module>yhcx-spring-boot-starter-security</module>
+
+        <!-- 依赖 yhcx-spring-boot-starter-web -->
+        <module>yhcx-spring-boot-starter-mybatis</module>
+
+        <!-- 依赖 yhcx-spring-boot-starter-web、yhcx-spring-boot-starter-redis -->
+        <module>yhcx-spring-boot-starter-protection</module>
+
+        <!-- 依赖 yhcx-spring-boot-starter-security、yhcx-spring-boot-starter-mybatis、yhcx-module-system-api -->
+        <module>yhcx-spring-boot-starter-biz-data-permission</module>
+
+        <!-- 需要依赖以上所有依赖 -->
+        <module>yhcx-spring-boot-starter-biz-tenant</module>
+
+        <module>yhcx-spring-boot-starter-biz-oidc</module>
+
+        <!-- 依赖 yhcx-spring-boot-starter-biz-tenant -->
+        <module>yhcx-spring-boot-starter-websocket</module>
+        <!-- 依赖 yhcx-spring-boot-starter-neo4j 亚信 -->
+        <module>yhcx-spring-boot-starter-yx</module>
+        <!-- 依赖 yhcx-spring-boot-starter-neo4j -->
+<!--        <module>yhcx-spring-boot-starter-neo4j</module>-->
+        <!-- 依赖 emq -->
+        <module>yhcx-spring-boot-starter-emq</module>
+        <!-- 依赖 yhcx-spring-boot-starter-工具链 -->
+        <module>yhcx-spring-boot-starter-platform</module>
+        <module>yhcx-spring-boot-starter-maas</module>
+    </modules>
+
+    <groupId>com.yhcx.boot</groupId>
+    <artifactId>yhcx-framework</artifactId>
+    <description>
+        该包是技术组件，每个子包，代表一个组件。每个组件包括两部分：
+            1. core 包：是该组件的核心封装
+            2. config 包：是该组件基于 Spring 的配置
+
+        技术组件，也分成两类：
+            1. 框架组件：和我们熟悉的 MyBatis、Redis 等等的拓展
+            2. 业务组件：和业务相关的组件的封装，例如说数据字典、操作日志等等。
+        如果是业务组件，Maven 名字会包含 biz
+    </description>
+    <url>https://github.com/YunaiV/ruoyi-vue-pro</url>
+
+</project>
