@@ -61,10 +61,33 @@ public class DatasetFileSyncMaasService {
 
         DatasetRecordInfoDO source = bo.getSource();
         DatasetMaasSaveReqVO target = bo.getTarget();
-        // source 旧数据集的文件路径：datacentermgr-web/PRIVATE/20/19/，这三个层级必然存在 PRIVATE/20/19/，是动态值
-        // source 旧数据集的文件路径中 datacentermgr-web/ 是固定值
-        // target 新数据集的文件路径：/dataset/10/2/3/9-18标注
-        // target 新数据集的文件路径中 /dataset/10/ 是固定值，这三个层级必然存在 2/3/9-18标注，是动态值
+        /*
+         * 文件路径映射：
+         *
+         * source（旧数据集）：datacentermgr-web/PRIVATE/20/19/
+         *   - datacentermgr-web/：旧系统固定前缀
+         *   - PRIVATE/20/19/：当前数据集的动态目录
+         *
+         * target（新数据集）：/dataset/10/2/3/9-18标注
+         *   - /dataset/10/：新系统固定前缀
+         *   - 2/3/9-18标注：当前数据集的动态目录
+         *
+         * 复制时不是简单地把 sourceKey 整体拼到 targetRootPath。
+         * sourcePrefix 会先被去掉，只保留“数据集目录下面的相对路径”，
+         * 再把这个相对路径拼到 targetRootPath。
+         *
+         * 例如：
+         *   source object : datacentermgr-web/PRIVATE/20/19/images/a.jpg
+         *   relativePath  : images/a.jpg
+         *   target object : dataset/10/2/3/9-18标注/images/a.jpg
+         *
+         * 核心规则：
+         *   source 数据集目录 + 相对文件路径
+         *                    ↓
+         *   target 数据集目录 + 相对文件路径
+         *
+         * 因此旧系统的固定前缀 datacentermgr-web/ 不会被复制到新系统。
+         */
 
         Long dsDatasetId = target.getId();
         String targetRootPath = target.getStorageDir();
@@ -97,6 +120,8 @@ public class DatasetFileSyncMaasService {
         long fileCount = 0;
         long totalBytes = 0;
 
+        // ① 先从 source S3/MinIO 获取对象列表。
+        // 这里只拿到 Key、Size 等对象元数据，并没有把文件正文加载进 Java 内存。
         ListObjectsV2Iterable pages = sourceS3Client.listObjectsV2Paginator(request);
         for (software.amazon.awssdk.services.s3.model.ListObjectsV2Response page : pages) {
             for (S3Object sourceObject : page.contents()) {
@@ -108,6 +133,7 @@ public class DatasetFileSyncMaasService {
                 String relativePath = relativePath(sourcePath.prefix, sourceKey);
                 String targetKey = joinPath(targetRootPath, relativePath);
 
+                // ② 目标端幂等检查：如果 target 已有同路径且同大小的对象，就不再传输文件内容。
                 if (targetObjectHasSameSize(targetKey, sourceObject.size())) {
                     log.info("[DatasetCopy] skip existing object, sourceKey={}, targetKey={}, size={}",
                             sourceKey, targetKey, sourceObject.size());
@@ -116,6 +142,8 @@ public class DatasetFileSyncMaasService {
                     continue;
                 }
 
+                // ③ 真正复制文件。这里不是 S3 server-side copy，而是：
+                //    source S3/MinIO -> Java InputStream -> target S3/MinIO。
                 copySingleObject(sourcePath.bucket, sourceKey, sourceObject.size(),
                         targetKey, dsDatasetId);
                 fileCount++;
@@ -132,16 +160,46 @@ public class DatasetFileSyncMaasService {
                                   long sourceSize,
                                   String targetKey,
                                   Long dsDatasetId) {
+        /*
+         * ④ 从 source 读取文件正文：
+         *
+         *    source S3/MinIO
+         *          │ GetObject
+         *          ▼
+         *    ResponseInputStream<GetObjectResponse>
+         *          │
+         *          │ read()
+         *          ▼
+         *    Java 应用
+         *
+         * getObject() 返回的是流，不是整个文件的 byte[]。
+         * 因此文件正文不会先完整落到 Java 堆内存，也不会先写成本地临时文件。
+         * sourceStream 会在后续 upload() 读取过程中持续从 source 获取数据。
+         */
         try (ResponseInputStream<GetObjectResponse> sourceStream =
                      sourceS3Client.getObject(GetObjectRequest.builder()
                              .bucket(sourceBucket)
                              .key(sourceKey)
                              .build())) {
 
+            // response() 读取的是本次 GetObject 响应的元数据；
+            // 文件正文仍然由 sourceStream 按需读取。
             GetObjectResponse response = sourceStream.response();
             long contentLength = response.contentLength() != null
                     ? response.contentLength() : sourceSize;
 
+            /*
+             * ⑤ 把 sourceStream 直接交给 targetStorage.upload()。
+             *
+             *    sourceStream.read()
+             *          ↓
+             *    targetStorage.upload(InputStream)
+             *          ↓
+             *    target S3/MinIO
+             *
+             * upload() 从输入流读取 source 文件内容并写入 targetKey。
+             * 整个过程没有“source -> 本地文件 -> target”的中间文件。
+             */
             targetStorage.upload(
                     copyProperties.getTargetBucket(),
                     targetKey,
@@ -151,6 +209,8 @@ public class DatasetFileSyncMaasService {
                     Map.of("dataset", String.valueOf(dsDatasetId))
             );
 
+            // ⑥ upload() 返回后，目标端上传调用已完成；try-with-resources 随后关闭 sourceStream，
+            // 释放 source 端 HTTP 连接及相关资源。
             log.info("[DatasetCopy] copied, sourceKey={}, targetKey={}, size={}",
                     sourceKey, targetKey, contentLength);
         } catch (IOException e) {
