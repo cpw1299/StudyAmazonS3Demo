@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS dataset_file_sync_record (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
     source_dataset_id BIGINT NOT NULL COMMENT '旧数据集ID',
     target_dataset_id BIGINT NOT NULL COMMENT '新数据集ID',
+    target_repository_path VARCHAR(1024) DEFAULT NULL COMMENT '新数据集存储路径',
     total_file_count BIGINT NOT NULL DEFAULT 0 COMMENT '源数据集文件总数',
     success_file_count BIGINT NOT NULL DEFAULT 0 COMMENT '成功同步文件数',
     failed_file_count BIGINT NOT NULL DEFAULT 0 COMMENT '失败文件数',
