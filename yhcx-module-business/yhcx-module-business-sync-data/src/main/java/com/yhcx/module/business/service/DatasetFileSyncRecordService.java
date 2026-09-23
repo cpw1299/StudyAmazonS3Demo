@@ -115,6 +115,27 @@ public class DatasetFileSyncRecordService {
         recordMapper.updateById(record);
     }
 
+    public void rebuildProgress(DatasetFileSyncRecordDO record, long totalFileCount) {
+        LambdaQueryWrapper<DatasetFileSyncDetailDO> successWrapper = new LambdaQueryWrapper<>();
+        successWrapper.eq(DatasetFileSyncDetailDO::getSyncRecordId, record.getId())
+                .eq(DatasetFileSyncDetailDO::getStatus, FILE_STATUS_SUCCESS);
+        long successCount = detailMapper.selectCount(successWrapper);
+
+        LambdaQueryWrapper<DatasetFileSyncDetailDO> failedWrapper = new LambdaQueryWrapper<>();
+        failedWrapper.eq(DatasetFileSyncDetailDO::getSyncRecordId, record.getId())
+                .eq(DatasetFileSyncDetailDO::getStatus, FILE_STATUS_FAILED);
+        long failedCount = detailMapper.selectCount(failedWrapper);
+
+        record.setTotalFileCount(totalFileCount);
+        record.setSuccessFileCount(successCount);
+        record.setFailedFileCount(failedCount);
+        record.setStatus(failedCount > 0 ? STATUS_FAILED
+                : (successCount >= totalFileCount ? STATUS_SUCCESS : STATUS_PROCESSING));
+        record.setErrorMessage(failedCount > 0 ? "存在文件同步失败，请查看 dataset_file_sync_detail" : null);
+        record.setFinishTime(STATUS_SUCCESS.equals(record.getStatus()) ? LocalDateTime.now() : null);
+        recordMapper.updateById(record);
+    }
+
     public void updateTotalFileCount(DatasetFileSyncRecordDO record, long totalFileCount) {
         record.setTotalFileCount(totalFileCount);
         record.setUpdateTime(LocalDateTime.now());
