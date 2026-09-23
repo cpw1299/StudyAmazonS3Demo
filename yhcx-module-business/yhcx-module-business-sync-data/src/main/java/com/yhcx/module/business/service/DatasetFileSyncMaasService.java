@@ -126,65 +126,72 @@ public class DatasetFileSyncMaasService {
         }
         recordService.markProcessing(record);
 
-        log.info("[DatasetCopy] start, datasetRecordId={}, dsDatasetId={}, sourceBucket={}, sourcePrefix={}, targetBucket={}, targetRootPath={}",
-                source.getId(), dsDatasetId, sourcePath.bucket, sourcePath.prefix, minioBucketName, targetRootPath);
+        try {
+            log.info("[DatasetCopy] start, datasetRecordId={}, dsDatasetId={}, sourceBucket={}, sourcePrefix={}, targetBucket={}, targetRootPath={}",
+                    source.getId(), dsDatasetId, sourcePath.bucket, sourcePath.prefix, minioBucketName, targetRootPath);
 
-        AmazonS3Client targetS3Client = this.getS3Client();
-        ListObjectsV2Request request = ListObjectsV2Request.builder()
-                .bucket(sourcePath.bucket)
-                .prefix(sourcePath.prefix)
-                .build();
+            AmazonS3Client targetS3Client = this.getS3Client();
+            ListObjectsV2Request request = ListObjectsV2Request.builder()
+                    .bucket(sourcePath.bucket)
+                    .prefix(sourcePath.prefix)
+                    .build();
 
-        // 第一遍只统计文件总数，避免把大量 S3Object 元数据全部放进 JVM 内存。
-        long totalFileCount = countSourceFiles(request, sourcePath);
-        recordService.updateTotalFileCount(record, totalFileCount);
-        if (totalFileCount == 0) {
-            recordService.markSuccess(record);
-            log.info("[DatasetCopy] completed, datasetRecordId={}, dsDatasetId={}, fileCount=0", source.getId(), dsDatasetId);
-            return;
-        }
+            // 第一遍只统计文件总数，避免把大量 S3Object 元数据全部放进 JVM 内存。
+            long totalFileCount = countSourceFiles(request, sourcePath);
+            recordService.updateTotalFileCount(record, totalFileCount);
+            if (totalFileCount == 0) {
+                recordService.markSuccess(record);
+                log.info("[DatasetCopy] completed, datasetRecordId={}, dsDatasetId={}, fileCount=0", source.getId(), dsDatasetId);
+                return;
+            }
 
-        // 第二遍真正处理文件。单个文件异常只记录 FAILED，不影响后续文件。
-        ListObjectsV2Iterable pages = sourceS3Client.listObjectsV2Paginator(request);
-        for (software.amazon.awssdk.services.s3.model.ListObjectsV2Response page : pages) {
-            for (S3Object sourceObject : page.contents()) {
-                String sourceKey = sourceObject.key();
-                if (sourceKey.endsWith("/")) {
-                    continue;
-                }
-
-                String relativePath = relativePath(sourcePath.prefix, sourceKey);
-                String targetKey = joinPath(targetRootPath, relativePath);
-                DatasetFileSyncDetailDO detail = recordService.getOrCreateDetail(
-                        record, sourceKey, targetKey, sourceObject.size());
-
-                if (DatasetFileSyncRecordService.FILE_STATUS_SUCCESS.equals(detail.getStatus())) {
-                    continue;
-                }
-
-                String previousStatus = detail.getStatus();
-                try {
-                    recordService.markFilePending(detail);
-                    if (targetObjectHasSameSize(targetS3Client, minioBucketName, targetKey, sourceObject.size())) {
-                        log.info("[DatasetCopy] skip existing object, sourceKey={}, targetKey={}, size={}",
-                                sourceKey, targetKey, sourceObject.size());
-                    } else {
-                        copySingleObject(sourcePath.bucket, minioBucketName, sourceKey, sourceObject.size(),
-                                targetKey, dsDatasetId);
+            // 第二遍真正处理文件。单个文件异常只记录 FAILED，不影响后续文件。
+            ListObjectsV2Iterable pages = sourceS3Client.listObjectsV2Paginator(request);
+            for (software.amazon.awssdk.services.s3.model.ListObjectsV2Response page : pages) {
+                for (S3Object sourceObject : page.contents()) {
+                    String sourceKey = sourceObject.key();
+                    if (sourceKey.endsWith("/")) {
+                        continue;
                     }
-                    recordService.recordFileSuccess(record, detail, previousStatus);
-                } catch (Exception e) {
-                    recordService.recordFileFailed(record, detail, previousStatus, e);
-                    log.error("[DatasetCopy] file failed, datasetRecordId={}, dsDatasetId={}, sourceKey={}, targetKey={}",
-                            source.getId(), dsDatasetId, sourceKey, targetKey, e);
+
+                    String relativePath = relativePath(sourcePath.prefix, sourceKey);
+                    String targetKey = joinPath(targetRootPath, relativePath);
+                    DatasetFileSyncDetailDO detail = recordService.getOrCreateDetail(
+                            record, sourceKey, targetKey, sourceObject.size());
+
+                    if (DatasetFileSyncRecordService.FILE_STATUS_SUCCESS.equals(detail.getStatus())) {
+                        continue;
+                    }
+
+                    String previousStatus = detail.getStatus();
+                    try {
+                        recordService.markFilePending(detail);
+                        if (targetObjectHasSameSize(targetS3Client, minioBucketName, targetKey, sourceObject.size())) {
+                            log.info("[DatasetCopy] skip existing object, sourceKey={}, targetKey={}, size={}",
+                                    sourceKey, targetKey, sourceObject.size());
+                        } else {
+                            copySingleObject(sourcePath.bucket, minioBucketName, sourceKey, sourceObject.size(),
+                                    targetKey, dsDatasetId);
+                        }
+                        recordService.recordFileSuccess(record, detail, previousStatus);
+                    } catch (Exception e) {
+                        recordService.recordFileFailed(record, detail, previousStatus, e);
+                        log.error("[DatasetCopy] file failed, datasetRecordId={}, dsDatasetId={}, sourceKey={}, targetKey={}",
+                                source.getId(), dsDatasetId, sourceKey, targetKey, e);
+                    }
                 }
             }
-        }
 
-        recordService.finish(record);
-        log.info("[DatasetCopy] completed, datasetRecordId={}, dsDatasetId={}, totalFileCount={}, successFileCount={}, failedFileCount={}",
-                source.getId(), dsDatasetId, record.getTotalFileCount(), record.getSuccessFileCount(), record.getFailedFileCount());
+            recordService.finish(record);
+            log.info("[DatasetCopy] completed, datasetRecordId={}, dsDatasetId={}, totalFileCount={}, successFileCount={}, failedFileCount={}",
+                    source.getId(), dsDatasetId, record.getTotalFileCount(), record.getSuccessFileCount(), record.getFailedFileCount());
     }
+
+
+        } catch (Exception e) {
+            recordService.markTaskFailed(record, e);
+            throw e;
+        }
 
     private long countSourceFiles(ListObjectsV2Request request, SourcePath sourcePath) {
         long totalFileCount = 0;
