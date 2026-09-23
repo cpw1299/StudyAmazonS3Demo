@@ -162,8 +162,8 @@ public class DatasetFileSyncMaasService {
                     continue;
                 }
 
+                String previousStatus = detail.getStatus();
                 try {
-                    String previousStatus = detail.getStatus();
                     recordService.markFilePending(detail);
                     if (targetObjectHasSameSize(targetS3Client, minioBucketName, targetKey, sourceObject.size())) {
                         log.info("[DatasetCopy] skip existing object, sourceKey={}, targetKey={}, size={}",
