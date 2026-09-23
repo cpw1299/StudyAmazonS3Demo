@@ -58,9 +58,6 @@ public class DatasetSyncMaasServiceImpl implements DatasetSyncMaasService {
         Map<Long, DatasetMaasSaveReqVO> savedMap = savedList.stream()
                 .collect(Collectors.toMap(DatasetMaasSaveReqVO::getSourceId, t -> t, (v1, v2) -> v1));
 
-        Map<Long, DatasetRecordInfoDO> doMap = doList.stream()
-                .collect(Collectors.toMap(DatasetRecordInfoDO::getId, t -> t, (v1, v2) -> v1));
-
         List<SourceTargetBO> boList = new ArrayList<>();
         for (DatasetRecordInfoDO infoDO : doList) {
             DatasetFileSyncRecordDO existingRecord = recordMap.get(infoDO.getId());
