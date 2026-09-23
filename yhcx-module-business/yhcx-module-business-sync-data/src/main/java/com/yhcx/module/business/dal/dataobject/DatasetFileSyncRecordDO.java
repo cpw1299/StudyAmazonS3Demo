@@ -22,6 +22,7 @@ public class DatasetFileSyncRecordDO {
 
     private Long sourceDatasetId;
     private Long targetDatasetId;
+    private String targetRepositoryPath;
 
     private Long totalFileCount;
     private Long successFileCount;
