@@ -28,13 +28,25 @@ public class DatasetFileSyncRecordService {
     private final DatasetFileSyncRecordMapper recordMapper;
     private final DatasetFileSyncDetailMapper detailMapper;
 
-    public DatasetFileSyncRecordDO getOrCreate(Long sourceDatasetId, Long targetDatasetId) {
+    public DatasetFileSyncRecordDO findBySourceDatasetId(Long sourceDatasetId) {
+        LambdaQueryWrapper<DatasetFileSyncRecordDO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(DatasetFileSyncRecordDO::getSourceDatasetId, sourceDatasetId)
+                .orderByDesc(DatasetFileSyncRecordDO::getId)
+                .last("LIMIT 1");
+        return recordMapper.selectOne(wrapper);
+    }
+
+    public DatasetFileSyncRecordDO getOrCreate(Long sourceDatasetId, Long targetDatasetId, String targetRepositoryPath) {
         LambdaQueryWrapper<DatasetFileSyncRecordDO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(DatasetFileSyncRecordDO::getSourceDatasetId, sourceDatasetId)
                 .eq(DatasetFileSyncRecordDO::getTargetDatasetId, targetDatasetId)
                 .last("LIMIT 1");
         DatasetFileSyncRecordDO record = recordMapper.selectOne(wrapper);
         if (record != null) {
+            if (record.getTargetRepositoryPath() == null && targetRepositoryPath != null) {
+                record.setTargetRepositoryPath(targetRepositoryPath);
+                recordMapper.updateById(record);
+            }
             return record;
         }
 
@@ -42,6 +54,7 @@ public class DatasetFileSyncRecordService {
         record = DatasetFileSyncRecordDO.builder()
                 .sourceDatasetId(sourceDatasetId)
                 .targetDatasetId(targetDatasetId)
+                .targetRepositoryPath(targetRepositoryPath)
                 .totalFileCount(0L)
                 .successFileCount(0L)
                 .failedFileCount(0L)
