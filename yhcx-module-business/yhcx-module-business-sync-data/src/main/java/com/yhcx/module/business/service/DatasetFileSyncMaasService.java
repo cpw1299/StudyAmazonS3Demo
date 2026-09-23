@@ -5,6 +5,12 @@ import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.yhcx.framework.file.core.service.S3FileStorageService;
 import com.yhcx.module.business.dal.dataobject.DatasetRecordInfoDO;
+import com.yhcx.module.business.dal.dataobject.DatasetFileSyncDetailDO;
+import com.yhcx.module.business.dal.dataobject.DatasetFileSyncRecordDO;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
+import java.util.concurrent.TimeUnit;
+
 import com.yhcx.module.business.framework.AmazonS3Properties;
 import com.yhcx.module.business.service.bo.SourceTargetBO;
 import com.yhcx.module.business.vo.DatasetMaasSaveReqVO;
@@ -40,6 +46,8 @@ public class DatasetFileSyncMaasService {
     private final S3Client sourceS3Client;
     private final AmazonS3Properties sourceProperties;
     private final S3FileStorageService s3FileStorageService;
+    private final DatasetFileSyncRecordService recordService;
+    private final RedissonClient redissonClient;
 
     @Value("${yhcx.minio-bucket-name:datax}")
     private String minioBucketName;
@@ -51,8 +59,8 @@ public class DatasetFileSyncMaasService {
     /**
      * 批量复制 dataset_record_info 对应的全部文件。
      *
-     * <p>source 和 target 已由上游同步服务组装到 SourceTargetBO 中，
-     * 本服务不再通过 dataset_record_info.id 查询源数据。</p>
+     * <p>每个数据集独立记录同步任务和文件明细。单个文件失败不会中断其它文件，
+     * 再次触发时只处理尚未成功的文件。</p>
      */
     public void copyDatasetFiles(List<SourceTargetBO> boList) {
         if (boList == null || boList.isEmpty()) {
@@ -70,40 +78,36 @@ public class DatasetFileSyncMaasService {
 
         DatasetRecordInfoDO source = bo.getSource();
         DatasetMaasSaveReqVO target = bo.getTarget();
-        /*
-         * 文件路径映射：
-         *
-         * source（旧数据集）：datacentermgr-web/PRIVATE/20/19/
-         *   - datacentermgr-web/：旧系统固定前缀
-         *   - PRIVATE/20/19/：当前数据集的动态目录
-         *
-         * target（新数据集）：/dataset/10/2/3/9-18标注
-         *   - /dataset/10/：新系统固定前缀
-         *   - 2/3/9-18标注：当前数据集的动态目录
-         *
-         * 复制时不是简单地把 sourceKey 整体拼到 targetRootPath。
-         * sourcePrefix 会先被去掉，只保留“数据集目录下面的相对路径”，
-         * 再把这个相对路径拼到 targetRootPath。
-         *
-         * 例如：
-         *   source object : datacentermgr-web/PRIVATE/20/19/images/a.jpg
-         *   relativePath  : images/a.jpg
-         *   target object : dataset/10/2/3/9-18标注/images/a.jpg
-         *
-         * 核心规则：
-         *   source 数据集目录 + 相对文件路径
-         *                    ↓
-         *   target 数据集目录 + 相对文件路径
-         *
-         * 因此旧系统的固定前缀 datacentermgr-web/ 不会被复制到新系统。
-         */
-
-        Long dsDatasetId = target.getId();
-        String targetRootPath = target.getRepositoryPath();
-
-        if (source.getId() == null || dsDatasetId == null) {
+        Long sourceDatasetId = source.getId();
+        Long targetDatasetId = target.getId();
+        if (sourceDatasetId == null || targetDatasetId == null) {
             throw new IllegalArgumentException("source.id 和 target.id 不能为空");
         }
+
+        String lockKey = "dataset:file:sync:lock:" + sourceDatasetId + ":" + targetDatasetId;
+        RLock lock = redissonClient.getLock(lockKey);
+        boolean locked = false;
+        try {
+            locked = lock.tryLock(0, TimeUnit.SECONDS);
+            if (!locked) {
+                log.warn("[DatasetCopy] another sync task is running, sourceDatasetId={}, targetDatasetId={}",
+                        sourceDatasetId, targetDatasetId);
+                return;
+            }
+            doCopyDatasetFiles(source, target);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("获取数据集文件同步锁被中断", e);
+        } finally {
+            if (locked && lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
+    }
+
+    private void doCopyDatasetFiles(DatasetRecordInfoDO source, DatasetMaasSaveReqVO target) {
+        Long dsDatasetId = target.getId();
+        String targetRootPath = target.getRepositoryPath();
         if (!StringUtils.hasText(targetRootPath)) {
             throw new IllegalArgumentException("target.storageDir 不能为空, dsDatasetId=" + dsDatasetId);
         }
@@ -111,27 +115,36 @@ public class DatasetFileSyncMaasService {
             throw new IllegalStateException("dataset.copy.target-bucket 未配置");
         }
         if (!StringUtils.hasText(source.getDatasetStoragePath())) {
-            throw new IllegalArgumentException(
-                    "dataset_storage_path 不能为空, id=" + source.getId());
+            throw new IllegalArgumentException("dataset_storage_path 不能为空, id=" + source.getId());
         }
 
         SourcePath sourcePath = resolveSourcePath(source.getDatasetStoragePath());
+        DatasetFileSyncRecordDO record = recordService.getOrCreate(source.getId(), dsDatasetId);
+        if (DatasetFileSyncRecordService.STATUS_SUCCESS.equals(record.getStatus())) {
+            log.info("[DatasetCopy] already completed, datasetRecordId={}, dsDatasetId={}", source.getId(), dsDatasetId);
+            return;
+        }
+        recordService.markProcessing(record);
 
         log.info("[DatasetCopy] start, datasetRecordId={}, dsDatasetId={}, sourceBucket={}, sourcePrefix={}, targetBucket={}, targetRootPath={}",
-                source.getId(), dsDatasetId, sourcePath.bucket, sourcePath.prefix,
-                minioBucketName, targetRootPath);
+                source.getId(), dsDatasetId, sourcePath.bucket, sourcePath.prefix, minioBucketName, targetRootPath);
 
+        AmazonS3Client targetS3Client = this.getS3Client();
         ListObjectsV2Request request = ListObjectsV2Request.builder()
                 .bucket(sourcePath.bucket)
                 .prefix(sourcePath.prefix)
                 .build();
 
-        long fileCount = 0;
-        long totalBytes = 0;
-        AmazonS3Client targetS3Client = this.getS3Client();
+        // 第一遍只统计文件总数，避免把大量 S3Object 元数据全部放进 JVM 内存。
+        long totalFileCount = countSourceFiles(request, sourcePath);
+        recordService.updateTotalFileCount(record, totalFileCount);
+        if (totalFileCount == 0) {
+            recordService.markSuccess(record);
+            log.info("[DatasetCopy] completed, datasetRecordId={}, dsDatasetId={}, fileCount=0", source.getId(), dsDatasetId);
+            return;
+        }
 
-        // ① 先从 source S3/MinIO 获取对象列表。
-        // 这里只拿到 Key、Size 等对象元数据，并没有把文件正文加载进 Java 内存。
+        // 第二遍真正处理文件。单个文件异常只记录 FAILED，不影响后续文件。
         ListObjectsV2Iterable pages = sourceS3Client.listObjectsV2Paginator(request);
         for (software.amazon.awssdk.services.s3.model.ListObjectsV2Response page : pages) {
             for (S3Object sourceObject : page.contents()) {
@@ -142,27 +155,49 @@ public class DatasetFileSyncMaasService {
 
                 String relativePath = relativePath(sourcePath.prefix, sourceKey);
                 String targetKey = joinPath(targetRootPath, relativePath);
+                DatasetFileSyncDetailDO detail = recordService.getOrCreateDetail(
+                        record, sourceKey, targetKey, sourceObject.size());
 
-                // ② 目标端幂等检查：如果 target 已有同路径且同大小的对象，就不再传输文件内容。
-                if (targetObjectHasSameSize(targetS3Client, minioBucketName, targetKey, sourceObject.size())) {
-                    log.info("[DatasetCopy] skip existing object, sourceKey={}, targetKey={}, size={}",
-                            sourceKey, targetKey, sourceObject.size());
-                    fileCount++;
-                    totalBytes += sourceObject.size();
+                if (DatasetFileSyncRecordService.FILE_STATUS_SUCCESS.equals(detail.getStatus())) {
                     continue;
                 }
 
-                // ③ 真正复制文件。这里不是 S3 server-side copy，而是：
-                //    source S3/MinIO -> Java InputStream -> target S3/MinIO。
-                copySingleObject(sourcePath.bucket, minioBucketName, sourceKey, sourceObject.size(),
-                        targetKey, dsDatasetId);
-                fileCount++;
-                totalBytes += sourceObject.size();
+                try {
+                    recordService.markFilePending(detail);
+                    if (targetObjectHasSameSize(targetS3Client, minioBucketName, targetKey, sourceObject.size())) {
+                        log.info("[DatasetCopy] skip existing object, sourceKey={}, targetKey={}, size={}",
+                                sourceKey, targetKey, sourceObject.size());
+                    } else {
+                        copySingleObject(sourcePath.bucket, minioBucketName, sourceKey, sourceObject.size(),
+                                targetKey, dsDatasetId);
+                    }
+                    recordService.markFileSuccess(detail);
+                    recordService.refreshProgress(record, totalFileCount);
+                } catch (Exception e) {
+                    recordService.markFileFailed(detail, e);
+                    recordService.refreshProgress(record, totalFileCount);
+                    log.error("[DatasetCopy] file failed, datasetRecordId={}, dsDatasetId={}, sourceKey={}, targetKey={}",
+                            source.getId(), dsDatasetId, sourceKey, targetKey, e);
+                }
             }
         }
 
-        log.info("[DatasetCopy] completed, datasetRecordId={}, dsDatasetId={}, fileCount={}, totalBytes={}",
-                source.getId(), dsDatasetId, fileCount, totalBytes);
+        recordService.refreshProgress(record, totalFileCount);
+        log.info("[DatasetCopy] completed, datasetRecordId={}, dsDatasetId={}, totalFileCount={}, successFileCount={}, failedFileCount={}",
+                source.getId(), dsDatasetId, record.getTotalFileCount(), record.getSuccessFileCount(), record.getFailedFileCount());
+    }
+
+    private long countSourceFiles(ListObjectsV2Request request, SourcePath sourcePath) {
+        long totalFileCount = 0;
+        ListObjectsV2Iterable pages = sourceS3Client.listObjectsV2Paginator(request);
+        for (software.amazon.awssdk.services.s3.model.ListObjectsV2Response page : pages) {
+            for (S3Object sourceObject : page.contents()) {
+                if (!sourceObject.key().endsWith("/")) {
+                    totalFileCount++;
+                }
+            }
+        }
+        return totalFileCount;
     }
 
     private void copySingleObject(String sourceBucket,
