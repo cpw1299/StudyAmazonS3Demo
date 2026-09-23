@@ -138,7 +138,12 @@ public class DatasetFileSyncMaasService {
 
             // 第一遍只统计文件总数，避免把大量 S3Object 元数据全部放进 JVM 内存。
             long totalFileCount = countSourceFiles(request, sourcePath);
-            recordService.updateTotalFileCount(record, totalFileCount);
+            recordService.rebuildProgress(record, totalFileCount);
+            if (DatasetFileSyncRecordService.STATUS_SUCCESS.equals(record.getStatus())) {
+                log.info("[DatasetCopy] all files already completed, datasetRecordId={}, dsDatasetId={}, fileCount={}",
+                        source.getId(), dsDatasetId, totalFileCount);
+                return;
+            }
             if (totalFileCount == 0) {
                 recordService.markSuccess(record);
                 log.info("[DatasetCopy] completed, datasetRecordId={}, dsDatasetId={}, fileCount=0", source.getId(), dsDatasetId);
