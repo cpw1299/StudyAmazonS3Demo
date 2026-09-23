@@ -6,6 +6,7 @@ import com.yhcx.module.business.dal.dataobject.DatasetRecordInfoDO;
 import com.yhcx.module.business.dal.mysql.DatasetRecordInfoMapper;
 import com.yhcx.module.business.listener.event.DatasetSyncMaasEvnet;
 import com.yhcx.module.business.service.bo.SourceTargetBO;
+import com.yhcx.module.business.dal.dataobject.DatasetFileSyncRecordDO;
 import com.yhcx.module.business.vo.DatasetMaasSaveReqVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,8 @@ public class DatasetSyncMaasServiceImpl implements DatasetSyncMaasService {
 
     private final ApplicationEventPublisher applicationEventPublisher;
 
+    private final DatasetFileSyncRecordService recordService;
+
     @Override
     public void copyDatasetRecordToDataset(List<Long> datasetRecordIds) {
         LambdaQueryWrapper<DatasetRecordInfoDO> queryWrapper = new LambdaQueryWrapper<>();
@@ -38,16 +41,49 @@ public class DatasetSyncMaasServiceImpl implements DatasetSyncMaasService {
             log.warn("[同步Maas数据集]无数据");
             return;
         }
-        // 转换数据
-        List<DatasetMaasSaveReqVO> saveReqList = convertData(doList);
-        // 调用 新数据集Api 保存，保存后得到主键ID、数据集路径等，根据sourceId找到对应关系
-        List<DatasetMaasSaveReqVO> savedList = datasetApi.createDataset(saveReqList);
-        // 处理原路径（Maas）、目标路径（新数据集）
-        Map<Long, DatasetRecordInfoDO> doMap = doList.stream().collect(Collectors.toMap(DatasetRecordInfoDO::getId, t -> t, (v1, v2) -> v1));
+        // 已经存在同步记录的数据集直接复用原 targetDatasetId/targetRepositoryPath，
+        // 避免重试时重新创建一个新数据集。
+        Map<Long, DatasetFileSyncRecordDO> recordMap = doList.stream()
+                .map(infoDO -> recordService.findBySourceDatasetId(infoDO.getId()))
+                .filter(record -> record != null)
+                .collect(Collectors.toMap(DatasetFileSyncRecordDO::getSourceDatasetId, t -> t, (v1, v2) -> v1));
+
+        List<DatasetRecordInfoDO> needCreateList = doList.stream()
+                .filter(infoDO -> !recordMap.containsKey(infoDO.getId()))
+                .collect(Collectors.toList());
+
+        List<DatasetMaasSaveReqVO> savedList = needCreateList.isEmpty()
+                ? new ArrayList<>()
+                : datasetApi.createDataset(convertData(needCreateList));
+        Map<Long, DatasetMaasSaveReqVO> savedMap = savedList.stream()
+                .collect(Collectors.toMap(DatasetMaasSaveReqVO::getSourceId, t -> t, (v1, v2) -> v1));
+
+        Map<Long, DatasetRecordInfoDO> doMap = doList.stream()
+                .collect(Collectors.toMap(DatasetRecordInfoDO::getId, t -> t, (v1, v2) -> v1));
+
         List<SourceTargetBO> boList = new ArrayList<>();
-        for (DatasetMaasSaveReqVO vo : savedList) {
-            DatasetRecordInfoDO infoDO = doMap.get(vo.getSourceId());
-            boList.add(new SourceTargetBO(infoDO, vo));
+        for (DatasetRecordInfoDO infoDO : doList) {
+            DatasetFileSyncRecordDO existingRecord = recordMap.get(infoDO.getId());
+            if (existingRecord != null) {
+                if (DatasetFileSyncRecordService.STATUS_SUCCESS.equals(existingRecord.getStatus())) {
+                    log.info("[同步Maas数据集]文件已全部同步，跳过，sourceDatasetId={}, targetDatasetId={}",
+                            infoDO.getId(), existingRecord.getTargetDatasetId());
+                    continue;
+                }
+                DatasetMaasSaveReqVO target = new DatasetMaasSaveReqVO();
+                target.setId(existingRecord.getTargetDatasetId());
+                target.setRepositoryPath(existingRecord.getTargetRepositoryPath());
+                target.setSourceId(infoDO.getId());
+                boList.add(new SourceTargetBO(infoDO, target));
+                continue;
+            }
+
+            DatasetMaasSaveReqVO target = savedMap.get(infoDO.getId());
+            if (target == null || target.getId() == null) {
+                throw new IllegalStateException("创建新数据集失败，sourceDatasetId=" + infoDO.getId());
+            }
+            recordService.getOrCreate(infoDO.getId(), target.getId(), target.getRepositoryPath());
+            boList.add(new SourceTargetBO(infoDO, target));
         }
 
         // 使用 ApplicationEvent 异步处理文件
