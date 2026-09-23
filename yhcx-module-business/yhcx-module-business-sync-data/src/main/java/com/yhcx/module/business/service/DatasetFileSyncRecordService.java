@@ -100,6 +100,28 @@ public class DatasetFileSyncRecordService {
         return detail;
     }
 
+    public void markProcessing(DatasetFileSyncRecordDO record) {
+        record.setStatus(STATUS_PROCESSING);
+        record.setStartTime(LocalDateTime.now());
+        record.setFinishTime(null);
+        record.setErrorMessage(null);
+        recordMapper.updateById(record);
+    }
+
+    public void updateTotalFileCount(DatasetFileSyncRecordDO record, long totalFileCount) {
+        record.setTotalFileCount(totalFileCount);
+        record.setUpdateTime(LocalDateTime.now());
+        recordMapper.updateById(record);
+    }
+
+    public void markSuccess(DatasetFileSyncRecordDO record) {
+        record.setStatus(STATUS_SUCCESS);
+        record.setFailedFileCount(0L);
+        record.setErrorMessage(null);
+        record.setFinishTime(LocalDateTime.now());
+        recordMapper.updateById(record);
+    }
+
     public void markFilePending(DatasetFileSyncDetailDO detail) {
         detail.setStatus(FILE_STATUS_PENDING);
         detail.setErrorMessage(null);
