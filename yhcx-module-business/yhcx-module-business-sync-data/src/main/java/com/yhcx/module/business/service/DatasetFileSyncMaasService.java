@@ -1,14 +1,16 @@
 package com.yhcx.module.business.service;
 
+import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.yhcx.framework.file.core.service.S3FileStorageService;
 import com.yhcx.module.business.dal.dataobject.DatasetRecordInfoDO;
 import com.yhcx.module.business.framework.AmazonS3Properties;
-import com.yhcx.module.business.framework.DatasetCopyProperties;
 import com.yhcx.module.business.service.bo.SourceTargetBO;
 import com.yhcx.module.business.vo.DatasetMaasSaveReqVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import software.amazon.awssdk.core.ResponseInputStream;
@@ -20,6 +22,7 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.services.s3.paginators.ListObjectsV2Iterable;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 
@@ -36,8 +39,14 @@ public class DatasetFileSyncMaasService {
 
     private final S3Client sourceS3Client;
     private final AmazonS3Properties sourceProperties;
-    private final DatasetCopyProperties copyProperties;
-    private final LegacyS3FileStorageTarget targetStorage;
+    private final S3FileStorageService s3FileStorageService;
+
+    @Value("${yhcx.minio-bucket-name:datax}")
+    private String minioBucketName;
+
+    private AmazonS3Client getS3Client() {
+        return s3FileStorageService.getS3Client();
+    }
 
     /**
      * 批量复制 dataset_record_info 对应的全部文件。
@@ -90,7 +99,7 @@ public class DatasetFileSyncMaasService {
          */
 
         Long dsDatasetId = target.getId();
-        String targetRootPath = target.getStorageDir();
+        String targetRootPath = target.getRepositoryPath();
 
         if (source.getId() == null || dsDatasetId == null) {
             throw new IllegalArgumentException("source.id 和 target.id 不能为空");
@@ -98,7 +107,7 @@ public class DatasetFileSyncMaasService {
         if (!StringUtils.hasText(targetRootPath)) {
             throw new IllegalArgumentException("target.storageDir 不能为空, dsDatasetId=" + dsDatasetId);
         }
-        if (!StringUtils.hasText(copyProperties.getTargetBucket())) {
+        if (!StringUtils.hasText(minioBucketName)) {
             throw new IllegalStateException("dataset.copy.target-bucket 未配置");
         }
         if (!StringUtils.hasText(source.getDatasetStoragePath())) {
@@ -110,7 +119,7 @@ public class DatasetFileSyncMaasService {
 
         log.info("[DatasetCopy] start, datasetRecordId={}, dsDatasetId={}, sourceBucket={}, sourcePrefix={}, targetBucket={}, targetRootPath={}",
                 source.getId(), dsDatasetId, sourcePath.bucket, sourcePath.prefix,
-                copyProperties.getTargetBucket(), targetRootPath);
+                minioBucketName, targetRootPath);
 
         ListObjectsV2Request request = ListObjectsV2Request.builder()
                 .bucket(sourcePath.bucket)
@@ -119,6 +128,7 @@ public class DatasetFileSyncMaasService {
 
         long fileCount = 0;
         long totalBytes = 0;
+        AmazonS3Client targetS3Client = this.getS3Client();
 
         // ① 先从 source S3/MinIO 获取对象列表。
         // 这里只拿到 Key、Size 等对象元数据，并没有把文件正文加载进 Java 内存。
@@ -134,7 +144,7 @@ public class DatasetFileSyncMaasService {
                 String targetKey = joinPath(targetRootPath, relativePath);
 
                 // ② 目标端幂等检查：如果 target 已有同路径且同大小的对象，就不再传输文件内容。
-                if (targetObjectHasSameSize(targetKey, sourceObject.size())) {
+                if (targetObjectHasSameSize(targetS3Client, minioBucketName, targetKey, sourceObject.size())) {
                     log.info("[DatasetCopy] skip existing object, sourceKey={}, targetKey={}, size={}",
                             sourceKey, targetKey, sourceObject.size());
                     fileCount++;
@@ -144,7 +154,7 @@ public class DatasetFileSyncMaasService {
 
                 // ③ 真正复制文件。这里不是 S3 server-side copy，而是：
                 //    source S3/MinIO -> Java InputStream -> target S3/MinIO。
-                copySingleObject(sourcePath.bucket, sourceKey, sourceObject.size(),
+                copySingleObject(sourcePath.bucket, minioBucketName, sourceKey, sourceObject.size(),
                         targetKey, dsDatasetId);
                 fileCount++;
                 totalBytes += sourceObject.size();
@@ -156,6 +166,7 @@ public class DatasetFileSyncMaasService {
     }
 
     private void copySingleObject(String sourceBucket,
+                                  String targetBucket,
                                   String sourceKey,
                                   long sourceSize,
                                   String targetKey,
@@ -200,8 +211,8 @@ public class DatasetFileSyncMaasService {
              * upload() 从输入流读取 source 文件内容并写入 targetKey。
              * 整个过程没有“source -> 本地文件 -> target”的中间文件。
              */
-            targetStorage.upload(
-                    copyProperties.getTargetBucket(),
+            this.upload(
+                    targetBucket,
                     targetKey,
                     sourceStream,
                     contentLength,
@@ -219,10 +230,12 @@ public class DatasetFileSyncMaasService {
         }
     }
 
-    private boolean targetObjectHasSameSize(String targetKey, long sourceSize) {
+    private boolean targetObjectHasSameSize(AmazonS3Client targetS3Client,
+                                            String targetBucket,
+                                            String targetKey,
+                                            long sourceSize) {
         try {
-            ObjectMetadata metadata = targetStorage.getS3Client().getObjectMetadata(
-                    copyProperties.getTargetBucket(), targetKey);
+            ObjectMetadata metadata = targetS3Client.getObjectMetadata(targetBucket, targetKey);
             return metadata.getContentLength() == sourceSize;
         } catch (AmazonS3Exception e) {
             if (e.getStatusCode() == 404) {
@@ -230,6 +243,39 @@ public class DatasetFileSyncMaasService {
             }
             throw e;
         }
+    }
+
+    /**
+     * 将源 S3 输入流上传到目标 MinIO。
+     *
+     * <p>实际上传策略由 S3FileStorageService 决定：5GB 以内普通 PutObject，
+     * 超过 5GB 自动 Multipart Upload。整个过程不需要本地临时文件。</p>
+     */
+    private void upload(String bucketName,
+                       String targetKey,
+                       InputStream inputStream,
+                       long contentLength,
+                       String contentType,
+                       Map<String, String> metadata) throws IOException {
+        if (!StringUtils.hasText(bucketName) || !StringUtils.hasText(targetKey)) {
+            throw new IllegalArgumentException("目标 bucket 和 key 不能为空");
+        }
+        if (inputStream == null) {
+            throw new IllegalArgumentException("inputStream 不能为空");
+        }
+        if (contentLength < 0) {
+            throw new IllegalArgumentException("文件大小不能小于 0");
+        }
+
+        s3FileStorageService.upload(
+                bucketName,
+                "",
+                targetKey,
+                inputStream,
+                contentLength,
+                contentType,
+                metadata
+        );
     }
 
     private SourcePath resolveSourcePath(String storagePath) {

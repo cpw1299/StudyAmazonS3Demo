@@ -12,7 +12,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * - 800GB 级对象必须重点关注 multipart part size、并发数和网络带宽。
  */
 @Data
-@ConfigurationProperties(prefix = "aws.s3")
+@ConfigurationProperties(prefix = "yhcx.aws.s3")
 public class AmazonS3Properties {
 
     /** S3 签名 Region；MinIO 未特别配置时通常使用 us-east-1。 */

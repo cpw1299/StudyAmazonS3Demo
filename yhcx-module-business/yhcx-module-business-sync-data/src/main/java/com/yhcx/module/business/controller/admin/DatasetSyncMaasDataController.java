@@ -3,6 +3,7 @@ package com.yhcx.module.business.controller.admin;
 import com.yhcx.framework.common.pojo.CommonResult;
 import com.yhcx.module.business.service.DatasetSyncMaasService;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -42,7 +43,7 @@ public class DatasetSyncMaasDataController {
      * @return
      */
     @PostMapping(value = "/sync/data")
-    public CommonResult<Object> syncData(List<Long> datasetRecordIds) {
+    public CommonResult<Object> syncData(@RequestBody List<Long> datasetRecordIds) {
         // 不为空时，同步指定数据
         datasetSyncMaasService.copyDatasetRecordToDataset(datasetRecordIds);
         return CommonResult.success(null);
