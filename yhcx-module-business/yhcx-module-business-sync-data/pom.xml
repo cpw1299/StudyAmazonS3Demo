@@ -94,6 +94,12 @@
             <optional>true</optional>
             <scope>provided</scope>
         </dependency>
+
+        <!-- Redis：用于数据集文件同步的分布式锁，防止同一数据集被并发触发。 -->
+        <dependency>
+            <groupId>com.yhcx.boot</groupId>
+            <artifactId>yhcx-spring-boot-starter-redis</artifactId>
+        </dependency>
     </dependencies>
 
 </project>
