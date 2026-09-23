@@ -141,35 +141,54 @@ public class DatasetFileSyncRecordService {
         detailMapper.updateById(detail);
     }
 
-    public void refreshProgress(DatasetFileSyncRecordDO record, long totalFileCount) {
-        LambdaQueryWrapper<DatasetFileSyncDetailDO> successWrapper = new LambdaQueryWrapper<>();
-        successWrapper.eq(DatasetFileSyncDetailDO::getSyncRecordId, record.getId())
-                .eq(DatasetFileSyncDetailDO::getStatus, FILE_STATUS_SUCCESS);
-        long successCount = detailMapper.selectCount(successWrapper);
-
-        LambdaQueryWrapper<DatasetFileSyncDetailDO> failedWrapper = new LambdaQueryWrapper<>();
-        failedWrapper.eq(DatasetFileSyncDetailDO::getSyncRecordId, record.getId())
-                .eq(DatasetFileSyncDetailDO::getStatus, FILE_STATUS_FAILED);
-        long failedCount = detailMapper.selectCount(failedWrapper);
-
-        LambdaQueryWrapper<DatasetFileSyncDetailDO> successSizeWrapper = new LambdaQueryWrapper<>();
-        successSizeWrapper.eq(DatasetFileSyncDetailDO::getSyncRecordId, record.getId())
-                .eq(DatasetFileSyncDetailDO::getStatus, FILE_STATUS_SUCCESS);
-        Long successSize = detailMapper.selectObjs(successSizeWrapper.select(DatasetFileSyncDetailDO::getFileSize))
-                .stream().mapToLong(value -> value == null ? 0L : ((Number) value).longValue()).sum();
-
-        String status = failedCount > 0 ? STATUS_FAILED
-                : (successCount >= totalFileCount ? STATUS_SUCCESS : STATUS_PROCESSING);
-
-        record.setTotalFileCount(totalFileCount);
+    public void recordFileSuccess(DatasetFileSyncRecordDO record,
+                                  DatasetFileSyncDetailDO detail,
+                                  String previousStatus) {
+        markFileSuccess(detail);
+        long successCount = record.getSuccessFileCount() == null ? 0L : record.getSuccessFileCount();
+        long failedCount = record.getFailedFileCount() == null ? 0L : record.getFailedFileCount();
+        if (!FILE_STATUS_SUCCESS.equals(previousStatus)) {
+            successCount++;
+        }
+        if (FILE_STATUS_FAILED.equals(previousStatus) && failedCount > 0) {
+            failedCount--;
+        }
         record.setSuccessFileCount(successCount);
         record.setFailedFileCount(failedCount);
-        record.setSuccessFileSize(successSize);
-        record.setStatus(status);
-        record.setFinishTime(STATUS_SUCCESS.equals(status) || STATUS_FAILED.equals(status)
-                ? LocalDateTime.now() : null);
+        record.setStatus(failedCount > 0 ? STATUS_FAILED
+                : (successCount >= (record.getTotalFileCount() == null ? 0L : record.getTotalFileCount())
+                ? STATUS_SUCCESS : STATUS_PROCESSING));
         record.setErrorMessage(failedCount > 0 ? "存在文件同步失败，请查看 dataset_file_sync_detail" : null);
-        recordMapper.updateProgress(record);
+        record.setFinishTime(STATUS_SUCCESS.equals(record.getStatus()) ? LocalDateTime.now() : null);
+        recordMapper.updateById(record);
+    }
+
+    public void recordFileFailed(DatasetFileSyncRecordDO record,
+                                 DatasetFileSyncDetailDO detail,
+                                 String previousStatus,
+                                 Exception e) {
+        markFileFailed(detail, e);
+        long failedCount = record.getFailedFileCount() == null ? 0L : record.getFailedFileCount();
+        if (!FILE_STATUS_FAILED.equals(previousStatus)) {
+            failedCount++;
+        }
+        record.setFailedFileCount(failedCount);
+        record.setStatus(STATUS_FAILED);
+        record.setErrorMessage("存在文件同步失败，请查看 dataset_file_sync_detail");
+        record.setFinishTime(LocalDateTime.now());
+        recordMapper.updateById(record);
+    }
+
+    public void finish(DatasetFileSyncRecordDO record) {
+        long successCount = record.getSuccessFileCount() == null ? 0L : record.getSuccessFileCount();
+        long failedCount = record.getFailedFileCount() == null ? 0L : record.getFailedFileCount();
+        long totalCount = record.getTotalFileCount() == null ? 0L : record.getTotalFileCount();
+        record.setStatus(failedCount > 0 ? STATUS_FAILED
+                : (successCount >= totalCount ? STATUS_SUCCESS : STATUS_PROCESSING));
+        record.setErrorMessage(failedCount > 0 ? "存在文件同步失败，请查看 dataset_file_sync_detail" : null);
+        record.setFinishTime(STATUS_SUCCESS.equals(record.getStatus()) || STATUS_FAILED.equals(record.getStatus())
+                ? LocalDateTime.now() : null);
+        recordMapper.updateById(record);
     }
 
     private String buildErrorMessage(Exception e) {
