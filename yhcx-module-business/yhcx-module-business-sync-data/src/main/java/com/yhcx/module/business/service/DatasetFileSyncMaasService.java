@@ -137,7 +137,7 @@ public class DatasetFileSyncMaasService {
                     .build();
 
             // 第一遍只统计文件总数，避免把大量 S3Object 元数据全部放进 JVM 内存。
-            long totalFileCount = countSourceFiles(request, sourcePath);
+            long totalFileCount = countSourceFiles(request);
             recordService.rebuildProgress(record, totalFileCount);
             if (DatasetFileSyncRecordService.STATUS_SUCCESS.equals(record.getStatus())) {
                 log.info("[DatasetCopy] all files already completed, datasetRecordId={}, dsDatasetId={}, fileCount={}",
@@ -196,7 +196,7 @@ public class DatasetFileSyncMaasService {
         }
     }
 
-    private long countSourceFiles(ListObjectsV2Request request, SourcePath sourcePath) {
+    private long countSourceFiles(ListObjectsV2Request request) {
         long totalFileCount = 0;
         ListObjectsV2Iterable pages = sourceS3Client.listObjectsV2Paginator(request);
         for (software.amazon.awssdk.services.s3.model.ListObjectsV2Response page : pages) {
