@@ -163,6 +163,7 @@ public class DatasetFileSyncMaasService {
                 }
 
                 try {
+                    String previousStatus = detail.getStatus();
                     recordService.markFilePending(detail);
                     if (targetObjectHasSameSize(targetS3Client, minioBucketName, targetKey, sourceObject.size())) {
                         log.info("[DatasetCopy] skip existing object, sourceKey={}, targetKey={}, size={}",
@@ -171,18 +172,16 @@ public class DatasetFileSyncMaasService {
                         copySingleObject(sourcePath.bucket, minioBucketName, sourceKey, sourceObject.size(),
                                 targetKey, dsDatasetId);
                     }
-                    recordService.markFileSuccess(detail);
-                    recordService.refreshProgress(record, totalFileCount);
+                    recordService.recordFileSuccess(record, detail, previousStatus);
                 } catch (Exception e) {
-                    recordService.markFileFailed(detail, e);
-                    recordService.refreshProgress(record, totalFileCount);
+                    recordService.recordFileFailed(record, detail, previousStatus, e);
                     log.error("[DatasetCopy] file failed, datasetRecordId={}, dsDatasetId={}, sourceKey={}, targetKey={}",
                             source.getId(), dsDatasetId, sourceKey, targetKey, e);
                 }
             }
         }
 
-        recordService.refreshProgress(record, totalFileCount);
+        recordService.finish(record);
         log.info("[DatasetCopy] completed, datasetRecordId={}, dsDatasetId={}, totalFileCount={}, successFileCount={}, failedFileCount={}",
                 source.getId(), dsDatasetId, record.getTotalFileCount(), record.getSuccessFileCount(), record.getFailedFileCount());
     }
