@@ -108,6 +108,13 @@ public class DatasetFileSyncRecordService {
         recordMapper.updateById(record);
     }
 
+    public void markTaskFailed(DatasetFileSyncRecordDO record, Exception e) {
+        record.setStatus(STATUS_FAILED);
+        record.setErrorMessage(buildErrorMessage(e));
+        record.setFinishTime(LocalDateTime.now());
+        recordMapper.updateById(record);
+    }
+
     public void updateTotalFileCount(DatasetFileSyncRecordDO record, long totalFileCount) {
         record.setTotalFileCount(totalFileCount);
         record.setUpdateTime(LocalDateTime.now());
