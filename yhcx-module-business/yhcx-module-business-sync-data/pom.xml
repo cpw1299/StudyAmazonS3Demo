@@ -22,47 +22,9 @@
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <aws-sdk.version>2.55.0</aws-sdk.version>
         <aws-crt.version>0.48.4</aws-crt.version>
-        <httpclient5.version>5.2.3</httpclient5.version>
-        <httpcore5.version>5.2.4</httpcore5.version>
         <mybatis-plus.version>3.5.9</mybatis-plus.version>
     </properties>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>software.amazon.awssdk</groupId>
-                <artifactId>bom</artifactId>
-                <version>${aws-sdk.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-                <exclusions>
-                    <exclusion>
-                        <groupId>org.apache.httpcomponents.client5</groupId>
-                        <artifactId>httpclient5</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.apache.httpcomponents.core5</groupId>
-                        <artifactId>httpcore5</artifactId>
-                    </exclusion>
-                </exclusions>
-            </dependency>
-
-            <!-- 覆盖 Spring Boot 2.7.18 对 Apache HttpClient 5.x 的版本管理 -->
-            <dependency>
-                <groupId>org.apache.httpcomponents.client5</groupId>
-                <artifactId>httpclient5</artifactId>
-                <version>${httpclient5.version}</version>
-            </dependency>
-
-            <dependency>
-                <groupId>org.apache.httpcomponents.core5</groupId>
-                <artifactId>httpcore5</artifactId>
-                <version>${httpcore5.version}</version>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 
     <dependencies>
         <dependency>
@@ -90,21 +52,15 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
         </dependency>
-        <!-- Apache HttpClient 5.x：AWS SDK 2.x 推荐的同步 HTTP Client -->
+        <!-- Apache HttpClient 5.x：AWS SDK 2.x 的 Apache5 HTTP Client。版本由根 BOM 统一锁定。 -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>apache5-client</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.apache.httpcomponents.client5</groupId>
-                    <artifactId>httpclient5</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.httpcomponents.core5</groupId>
-                    <artifactId>httpcore5</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
+        <!--
+             保留直接声明，确保 Spring Boot 的 5.1.x 管理不会在最终运行包中抢回版本。
+             根 yhcx-dependencies 已锁定 httpclient5 5.6.4 / httpcore5 5.4.3。
+        -->
         <!-- Apache HttpClient 5 runtime dependencies -->
         <dependency>
             <groupId>org.apache.httpcomponents.client5</groupId>
