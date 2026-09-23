@@ -185,13 +185,11 @@ public class DatasetFileSyncMaasService {
             recordService.finish(record);
             log.info("[DatasetCopy] completed, datasetRecordId={}, dsDatasetId={}, totalFileCount={}, successFileCount={}, failedFileCount={}",
                     source.getId(), dsDatasetId, record.getTotalFileCount(), record.getSuccessFileCount(), record.getFailedFileCount());
-    }
-
-
         } catch (Exception e) {
             recordService.markTaskFailed(record, e);
             throw e;
         }
+    }
 
     private long countSourceFiles(ListObjectsV2Request request, SourcePath sourcePath) {
         long totalFileCount = 0;
