@@ -119,7 +119,7 @@ public class DatasetFileSyncMaasService {
         }
 
         SourcePath sourcePath = resolveSourcePath(source.getDatasetStoragePath());
-        DatasetFileSyncRecordDO record = recordService.getOrCreate(source.getId(), dsDatasetId);
+        DatasetFileSyncRecordDO record = recordService.getOrCreate(source.getId(), dsDatasetId, targetRootPath);
         if (DatasetFileSyncRecordService.STATUS_SUCCESS.equals(record.getStatus())) {
             log.info("[DatasetCopy] already completed, datasetRecordId={}, dsDatasetId={}", source.getId(), dsDatasetId);
             return;
