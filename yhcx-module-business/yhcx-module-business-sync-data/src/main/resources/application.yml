@@ -84,3 +84,18 @@
 #  copy:
 #    # 目标 MinIO bucket（固定值由部署环境注入）
 #    target-bucket: ${DATASET_COPY_TARGET_BUCKET:}
+
+# ============================================================
+# dataset 文件同步异步线程池
+# ============================================================
+dataset:
+  sync:
+    async:
+      # 文件同步是 I/O 密集型任务，默认同时执行 4 个数据集。
+      core-pool-size: ${DATASET_SYNC_ASYNC_CORE_POOL_SIZE:4}
+      # 高峰期最多同时执行 8 个数据集。
+      max-pool-size: ${DATASET_SYNC_ASYNC_MAX_POOL_SIZE:8}
+      # 超出工作线程后的排队任务数。
+      queue-capacity: ${DATASET_SYNC_ASYNC_QUEUE_CAPACITY:100}
+      keep-alive-seconds: ${DATASET_SYNC_ASYNC_KEEP_ALIVE_SECONDS:60}
+      await-termination-seconds: ${DATASET_SYNC_ASYNC_AWAIT_TERMINATION_SECONDS:60}
