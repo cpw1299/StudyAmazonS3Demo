@@ -1,7 +1,7 @@
 package com.yhcx.module.business.service.bo;
 
-import com.yhcx.module.business.vo.DatasetMaasSaveReqVO;
 import com.yhcx.module.business.dal.dataobject.DatasetRecordInfoDO;
+import com.yhcx.module.business.vo.DatasetSaveReqVo;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -12,5 +12,5 @@ import lombok.NoArgsConstructor;
 public class SourceTargetBO {
 
     private DatasetRecordInfoDO source;
-    private DatasetMaasSaveReqVO target;
+    private DatasetSaveReqVo target;
 }

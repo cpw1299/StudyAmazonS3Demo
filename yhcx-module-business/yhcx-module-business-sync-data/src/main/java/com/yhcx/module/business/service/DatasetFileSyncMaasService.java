@@ -4,18 +4,16 @@ import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.yhcx.framework.file.core.service.S3FileStorageService;
-import com.yhcx.module.business.dal.dataobject.DatasetRecordInfoDO;
 import com.yhcx.module.business.dal.dataobject.DatasetFileSyncDetailDO;
 import com.yhcx.module.business.dal.dataobject.DatasetFileSyncRecordDO;
-import org.redisson.api.RLock;
-import org.redisson.api.RedissonClient;
-import java.util.concurrent.TimeUnit;
-
+import com.yhcx.module.business.dal.dataobject.DatasetRecordInfoDO;
 import com.yhcx.module.business.framework.AmazonS3Properties;
 import com.yhcx.module.business.service.bo.SourceTargetBO;
-import com.yhcx.module.business.vo.DatasetMaasSaveReqVO;
+import com.yhcx.module.business.vo.DatasetSaveReqVo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -31,6 +29,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * dataset_record_info -> ds_dataset 的文件复制服务。
@@ -77,7 +76,7 @@ public class DatasetFileSyncMaasService {
         }
 
         DatasetRecordInfoDO source = bo.getSource();
-        DatasetMaasSaveReqVO target = bo.getTarget();
+        DatasetSaveReqVo target = bo.getTarget();
         Long sourceDatasetId = source.getId();
         Long targetDatasetId = target.getId();
         if (sourceDatasetId == null || targetDatasetId == null) {
@@ -105,9 +104,9 @@ public class DatasetFileSyncMaasService {
         }
     }
 
-    private void doCopyDatasetFiles(DatasetRecordInfoDO source, DatasetMaasSaveReqVO target) {
+    private void doCopyDatasetFiles(DatasetRecordInfoDO source, DatasetSaveReqVo target) {
         Long dsDatasetId = target.getId();
-        String targetRootPath = target.getRepositoryPath();
+        String targetRootPath = normalizePrefix(target.getRepositoryPath()) + "/";
         if (!StringUtils.hasText(targetRootPath)) {
             throw new IllegalArgumentException("target.storageDir 不能为空, dsDatasetId=" + dsDatasetId);
         }
@@ -338,7 +337,7 @@ public class DatasetFileSyncMaasService {
             throw new IllegalStateException(
                     "aws.s3.default-bucket 未配置，且 dataset_storage_path 不是 s3://bucket/prefix 格式");
         }
-        return new SourcePath(sourceProperties.getDefaultBucket(), normalizePrefix(path));
+        return new SourcePath(sourceProperties.getDefaultBucket(), normalizePrefix(path) + "/");
     }
 
     private String relativePath(String prefix, String objectKey) {
