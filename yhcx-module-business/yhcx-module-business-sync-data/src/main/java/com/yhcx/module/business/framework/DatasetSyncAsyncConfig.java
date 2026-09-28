@@ -2,6 +2,7 @@ package com.yhcx.module.business.framework;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.AsyncConfigurer;
@@ -17,21 +18,31 @@ import java.util.concurrent.ThreadPoolExecutor;
 @EnableAsync
 public class DatasetSyncAsyncConfig implements AsyncConfigurer {
 
-    private static final int CORE_POOL_SIZE = 4;
-    private static final int MAX_POOL_SIZE = 8;
-    private static final int QUEUE_CAPACITY = 100;
-    private static final int KEEP_ALIVE_SECONDS = 60;
+    @Value("${dataset.sync.async.core-pool-size:4}")
+    private int corePoolSize;
+
+    @Value("${dataset.sync.async.max-pool-size:8}")
+    private int maxPoolSize;
+
+    @Value("${dataset.sync.async.queue-capacity:100}")
+    private int queueCapacity;
+
+    @Value("${dataset.sync.async.keep-alive-seconds:60}")
+    private int keepAliveSeconds;
+
+    @Value("${dataset.sync.async.await-termination-seconds:60}")
+    private int awaitTerminationSeconds;
 
     @Bean("datasetSyncExecutor")
     public Executor datasetSyncExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(CORE_POOL_SIZE);
-        executor.setMaxPoolSize(MAX_POOL_SIZE);
-        executor.setQueueCapacity(QUEUE_CAPACITY);
-        executor.setKeepAliveSeconds(KEEP_ALIVE_SECONDS);
+        executor.setCorePoolSize(corePoolSize);
+        executor.setMaxPoolSize(maxPoolSize);
+        executor.setQueueCapacity(queueCapacity);
+        executor.setKeepAliveSeconds(keepAliveSeconds);
         executor.setThreadNamePrefix("dataset-sync-");
         executor.setWaitForTasksToCompleteOnShutdown(true);
-        executor.setAwaitTerminationSeconds(60);
+        executor.setAwaitTerminationSeconds(awaitTerminationSeconds);
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         executor.initialize();
         return executor;
