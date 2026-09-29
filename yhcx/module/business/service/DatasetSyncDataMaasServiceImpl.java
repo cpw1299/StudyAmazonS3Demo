@@ -115,7 +115,6 @@ public class DatasetSyncDataMaasServiceImpl implements DatasetSyncDataMaasServic
                 SystemConstants.CLIENT.MAAS_CLIENT_ID,
                 String.valueOf(maasId));
     }
-    }
 
     private LabelValidationResult validateData(
             AdminMaaSUserRespDTO companyTemaIdUserIdSourceByMaaS,
